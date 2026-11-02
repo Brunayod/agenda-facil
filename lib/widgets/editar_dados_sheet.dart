@@ -5,6 +5,7 @@ import '../core/app_input.dart';
 import '../core/app_text.dart';
 import '../data/catalogo.dart';
 import '../data/paciente_repository.dart';
+import '../models/paciente.dart';
 import 'app_snack_bar.dart';
 import 'botao_app.dart';
 import 'opcao_chip.dart';
@@ -61,7 +62,9 @@ class _ConteudoState extends State<_Conteudo> {
     final p = PacienteRepository.instance.paciente;
     _telefone = TextEditingController(text: p.telefone);
     _email = TextEditingController(text: p.email);
-    _endereco = TextEditingController(text: p.endereco);
+    _endereco = TextEditingController(
+      text: p.endereco == Paciente.enderecoNaoInformado ? '' : p.endereco,
+    );
     _tipoSanguineo = p.tipoSanguineo;
     _unidadeId = p.unidadeReferenciaId;
   }

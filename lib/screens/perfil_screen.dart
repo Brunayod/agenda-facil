@@ -47,6 +47,51 @@ class PerfilScreen extends StatelessWidget {
     }
   }
 
+  /// Pede confirmação e encerra a sessão; o app volta sozinho ao login.
+  Future<void> _confirmarSaida(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Sair da conta?', style: AppText.listaTitulo),
+        content: Text(
+          'Você precisará entrar novamente com seu CPF ou Cartão SUS. '
+          'Seus agendamentos e dados continuam salvos neste aparelho.',
+          style: AppText.detalheCorpo,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancelar',
+              style: AppText.opcao(
+                AppColors.textoSecundario,
+                peso: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Sair',
+              style: AppText.opcao(
+                AppColors.canceladoTexto,
+                peso: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmou != true) return;
+
+    await PacienteRepository.instance.sair();
+    AppSnackBar.mostrar(messenger, 'Você saiu da conta.', icone: Icons.logout);
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = PacienteRepository.instance;
@@ -215,6 +260,13 @@ class PerfilScreen extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(height: 20),
+                  BotaoApp(
+                    rotulo: 'Sair da conta',
+                    icone: Icons.logout,
+                    estilo: EstiloBotao.perigo,
+                    onPressed: () => _confirmarSaida(context),
                   ),
                 ],
               ),

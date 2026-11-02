@@ -1,23 +1,97 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/agendamento.dart';
 import '../models/unidade.dart';
 import 'catalogo.dart';
 
-/// Repositório em memória (singleton) dos agendamentos do usuário.
+/// Repositório (singleton) dos agendamentos do paciente logado.
 ///
 /// É um [ChangeNotifier]: telas que usam `ListenableBuilder` são
 /// reconstruídas automaticamente ao adicionar, cancelar ou reagendar.
-/// Os dados somem ao fechar o app; troque por API/banco quando existir.
+///
+/// Cada paciente tem a própria lista, salva em `shared_preferences` na chave
+/// `af.agendamentos.<cpf>`. Quem chama [carregarPara] (o login) escolhe de
+/// quem são os dados; [descarregar] (o logout) esvazia a memória sem apagar
+/// o que está salvo.
 class AgendamentoRepository extends ChangeNotifier {
-  AgendamentoRepository._() {
-    _semear();
-  }
+  AgendamentoRepository._();
 
   static final AgendamentoRepository instance = AgendamentoRepository._();
 
+  static const _prefixoChave = 'af.agendamentos.';
+  static const _chaveSequencia = 'af.sequencia';
+
   final List<Agendamento> _itens = [];
+
+  /// Contador global de protocolos (nunca repete entre pacientes).
   int _sequencia = 1000;
+
+  /// CPF do paciente dono da lista atual (`null` = ninguém logado).
+  String? _cpf;
+
+  /// Carrega do disco os agendamentos de [cpf]. Se não houver nada salvo e
+  /// [semearSeVazio] for `true`, cria os dados de demonstração.
+  Future<void> carregarPara(String cpf, {bool semearSeVazio = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+    _cpf = cpf;
+    _itens.clear();
+    _sequencia = prefs.getInt(_chaveSequencia) ?? 1000;
+
+    var encontrou = false;
+    final bruto = prefs.getString('$_prefixoChave$cpf');
+    if (bruto != null) {
+      try {
+        final mapa = jsonDecode(bruto) as Map<String, dynamic>;
+        _itens.addAll(
+          (mapa['itens'] as List)
+              .map((e) => Agendamento.fromJson(e as Map<String, dynamic>)),
+        );
+        encontrou = true;
+      } on Object {
+        _itens.clear(); // dados corrompidos: trata como primeiro acesso
+      }
+    }
+
+    if (!encontrou && semearSeVazio) _semear();
+    _concluirVencidos();
+    await _salvar();
+    notifyListeners();
+  }
+
+  /// Esvazia a memória (logout). Os dados salvos no aparelho permanecem.
+  void descarregar() {
+    _cpf = null;
+    _itens.clear();
+    notifyListeners();
+  }
+
+  /// Agendamentos confirmados cuja data já passou viram "Realizado": sem
+  /// isso, ao reabrir o app dias depois eles ficariam "ativos" no passado.
+  void _concluirVencidos() {
+    final agora = DateTime.now();
+    for (var i = 0; i < _itens.length; i++) {
+      final a = _itens[i];
+      if (a.estaAtivo && a.dataHora.isBefore(agora)) {
+        _itens[i] = a.copyWith(status: StatusAgendamento.realizado);
+      }
+    }
+  }
+
+  Future<void> _salvar() async {
+    final cpf = _cpf;
+    if (cpf == null) return;
+    // O JSON é montado antes do await: grava o estado deste instante e não
+    // escreve nada se o usuário sair da conta enquanto o disco responde.
+    final json = jsonEncode({'itens': _itens.map((a) => a.toJson()).toList()});
+    final sequencia = _sequencia;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_prefixoChave$cpf', json);
+    await prefs.setInt(_chaveSequencia, sequencia);
+  }
 
   /// Agendamentos confirmados, do mais próximo para o mais distante.
   List<Agendamento> get ativos {
@@ -67,6 +141,7 @@ class AgendamentoRepository extends ChangeNotifier {
     );
     _itens.add(novo);
     notifyListeners();
+    unawaited(_salvar());
     return novo;
   }
 
@@ -87,6 +162,7 @@ class AgendamentoRepository extends ChangeNotifier {
     if (indice < 0) return;
     _itens[indice] = fn(_itens[indice]);
     notifyListeners();
+    unawaited(_salvar());
   }
 
   Agendamento _criar({

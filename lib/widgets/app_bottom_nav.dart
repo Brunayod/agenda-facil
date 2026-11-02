@@ -22,7 +22,9 @@ class AppBottomNav extends StatelessWidget {
 
   /// Quanto o botão central sobressai acima da barra branca.
   static const double _saliencia = 19;
-  static const double _alturaBarra = 59;
+  /// Altura da barra branca (sem a área de gestos do sistema). Folga extra
+  /// para ícone + rótulo nunca estourarem, mesmo com fonte ampliada.
+  static const double _alturaBarra = 67;
 
   @override
   Widget build(BuildContext context) {

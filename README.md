@@ -1,40 +1,44 @@
 # Agenda Fácil (TCC) — telas em Flutter
 
-Telas implementadas a partir do protótipo do Figma:
-
-1. **Home** — "Minha saúde" (Novas consultas, Meus agendamentos, Rede de saúde)
-2. **Meus agendamentos › Agenda ativa**
-3. **Meus agendamentos › Histórico**
-
-Rede e Perfil ainda não existem no protótipo e têm uma tela provisória ("Em construção").
+## Funcionalidades
+- **Home**: os 3 cards funcionam (Novas consultas → novo agendamento, Meus agendamentos → agenda, Rede de saúde → aba Rede).
+- **Novo agendamento** (botão central SUS, card da Home ou "Agendar nesta unidade"): tipo, serviço (dinâmico), unidade, data e horário.
+- **Meus agendamentos**: Agenda ativa / Histórico em tempo real; detalhes, reagendar e cancelar.
+- **Rede**: 5 UBS com busca por nome/bairro, filtro por tipo de atendimento, detalhes com profissionais e botão de agendar na unidade.
+- **Login e cadastro**: entrada por CPF ou Cartão SUS + senha (mostrar/ocultar), "Criar minha conta" (nome, CPF, CNS, nascimento, tipo sanguíneo, telefone, e-mail, UBS de referência e senha) e "Acesso Rápido (Demo Banca)", que entra como Jheniffer Almeida Santos. Conta de demonstração: CPF `123.456.789-09`, senha `demo123`.
+- **Perfil**: Cartão SUS Digital (toque para ampliar com QR Code/código de barras ilustrativos), resumo de saúde (alergias e condições editáveis), dados cadastrais editáveis e preferências (lembretes e tamanho do texto); botão **Sair da conta** (com confirmação) no final da página.
 
 ## Como rodar
-
-Este pacote tem só o código do app (`lib/`, `assets/`, `pubspec.yaml`). Gere as pastas de plataforma (android/ios/web) e rode:
-
 ```bash
-cd agenda_facil
-flutter create --project-name agenda_facil .
+flutter create --project-name agenda_facil .   # só na primeira vez
 flutter pub get
-flutter run
+flutter run -d chrome
 ```
 
 ## Estrutura
-
 ```
 lib/
-  main.dart
-  core/       cores, textos (Poppins), tema e caminhos dos assets
-  models/     Agendamento, TipoAgendamento, StatusAgendamento
-  data/       dados de exemplo (trocar por API depois)
-  widgets/    header, barra inferior, cards, chips, abas, fundo
-  screens/    home, meus agendamentos, em construção, shell de navegação
-assets/svg/   ícones e fundos exportados do Figma
+  core/      cores, textos (Poppins), tema, campos de formulário, máscaras e validadores, assets
+  models/    Agendamento, Paciente, Unidade, Profissional, TipoAtendimento (todos com toJson/fromJson quando aplicável)
+  data/      catalogo.dart (UBS, serviços, horários, orientações)
+             agendamento_repository.dart e paciente_repository.dart (estado reativo + persistência local, sessão e contas)
+  widgets/   componentes reutilizáveis (header, nav, cards, chips, sheets, cartão SUS...)
+  screens/   home, rede, perfil, novo agendamento, meus agendamentos, shell
 ```
 
-## Observações
+## Persistência (`shared_preferences`)
+Tudo é salvo automaticamente no aparelho (no navegador, `localStorage`):
+- `af.contas` — contas cadastradas (`Paciente.toJson()` + senha com hash e salt). Alterações de dados, alergias, condições e preferências de acessibilidade são gravadas aqui.
+- `af.sessao` — CPF do paciente logado; ao reabrir o app a sessão é restaurada.
+- `af.agendamentos.<cpf>` — agendamentos de cada paciente (criados, remarcados e cancelados) via `Agendamento.toJson()/fromJson()`.
+- `af.sequencia` — contador dos protocolos.
 
-- Fonte **Poppins** via pacote `google_fonts` (baixa na primeira execução). Para funcionar offline, baixe os .ttf, coloque em `assets/fonts/` e declare no `pubspec.yaml`.
-- Os SVGs foram extraídos dos exports do Figma (ícones, logo SUS, fundo). Textos do Figma saem como curvas no SVG, então foram refeitos como `Text`.
-- O botão central do SUS leva à Home (ajuste em `app_shell.dart` se for outra ação).
-- "Novas consultas" e o toque nos cards de agendamento mostram uma mensagem "em breve" até existirem essas telas.
+Na primeira abertura a conta demo (Jheniffer) é criada com os agendamentos de demonstração. Novas contas começam sem agendamentos. Ao reabrir, agendamentos "Confirmado" cuja data já passou viram "Realizado".
+Para zerar os dados no Chrome: DevTools → Application → Local Storage → Clear.
+
+> O hash de senha é didático (protótipo sem servidor). Em produção use uma API (ex.: login gov.br) com bcrypt/argon2.
+
+## Observações
+- Endereços, telefones, distâncias, profissionais, orientações e dados do paciente são EXEMPLOS fictícios.
+- O QR Code e o código de barras do Cartão SUS são ilustrativos (não legíveis por leitores).
+- "Lembretes de consulta" guarda a preferência; notificações reais exigem um pacote de notificações.

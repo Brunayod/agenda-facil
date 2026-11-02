@@ -7,6 +7,7 @@ import '../data/agendamento_repository.dart';
 import '../models/agendamento.dart';
 import 'app_snack_bar.dart';
 import 'botao_app.dart';
+import 'info_linha.dart';
 import 'reagendar_sheet.dart';
 import 'status_chip.dart';
 import 'tipo_atendimento_icone.dart';
@@ -208,17 +209,17 @@ class _Corpo extends StatelessWidget {
         const SizedBox(height: 12),
         StatusChip(status: a.status),
         const SizedBox(height: 20),
-        _InfoLinha(
+        InfoLinha(
           icone: Icons.event_outlined,
           rotulo: 'Data e horário',
           valor: a.dataPorExtenso,
         ),
-        _InfoLinha(
+        InfoLinha(
           icone: Icons.person_outline,
           rotulo: 'Profissional',
           valor: a.profissional,
         ),
-        _InfoLinha(
+        InfoLinha(
           icone: Icons.location_on_outlined,
           rotulo: 'Unidade',
           valor: '${a.unidade.nome}\n${a.unidade.endereco}',
@@ -264,49 +265,6 @@ class _Corpo extends StatelessWidget {
         ),
         const SizedBox(height: 8),
       ],
-    );
-  }
-}
-
-class _InfoLinha extends StatelessWidget {
-  const _InfoLinha({
-    required this.icone,
-    required this.rotulo,
-    required this.valor,
-  });
-
-  final IconData icone;
-  final String rotulo;
-  final String valor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: const BoxDecoration(
-              color: AppColors.azulOnda,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icone, size: 20, color: AppColors.azulPrimario),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(rotulo, style: AppText.detalheRotulo),
-                Text(valor, style: AppText.detalheValor),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

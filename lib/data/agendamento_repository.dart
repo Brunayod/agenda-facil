@@ -102,7 +102,7 @@ class AgendamentoRepository extends ChangeNotifier {
       tipo: tipo,
       servico: servico,
       unidade: unidade,
-      profissional: Catalogo.profissionalPara(tipo, servico),
+      profissional: Catalogo.profissionalPara(tipo, servico, unidade: unidade),
       dataHora: dataHora,
       status: status,
       orientacoes: Catalogo.orientacoesPara(tipo, servico),

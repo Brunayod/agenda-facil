@@ -13,12 +13,18 @@ import '../widgets/app_snack_bar.dart';
 import '../widgets/botao_app.dart';
 import '../widgets/opcao_chip.dart';
 import '../widgets/seletor_data_hora.dart';
+import '../widgets/tile_unidade.dart';
 import '../widgets/tipo_atendimento_icone.dart';
 
 /// Formulário de novo agendamento. Ao confirmar, fecha devolvendo o
 /// [Agendamento] criado (ou `null` se o usuário voltar sem confirmar).
+///
+/// Com [unidadeInicial] a UBS já vem selecionada e só aparecem os tipos de
+/// atendimento que ela oferece.
 class NovoAgendamentoScreen extends StatefulWidget {
-  const NovoAgendamentoScreen({super.key});
+  const NovoAgendamentoScreen({super.key, this.unidadeInicial});
+
+  final Unidade? unidadeInicial;
 
   @override
   State<NovoAgendamentoScreen> createState() => _NovoAgendamentoScreenState();
@@ -30,17 +36,40 @@ class _NovoAgendamentoScreenState extends State<NovoAgendamentoScreen> {
   Unidade? _unidade;
   DateTime? _dataHora;
 
+  @override
+  void initState() {
+    super.initState();
+    _unidade = widget.unidadeInicial;
+  }
+
   bool get _completo =>
       _tipo != null &&
       _servico != null &&
       _unidade != null &&
       _dataHora != null;
 
+  /// Um tipo só pode ser escolhido se a unidade (quando já escolhida) o oferece.
+  bool _tipoDisponivel(TipoAtendimento tipo) =>
+      _unidade == null || _unidade!.oferece(tipo);
+
   void _selecionarTipo(TipoAtendimento tipo) {
     if (tipo == _tipo) return;
     setState(() {
       _tipo = tipo;
       _servico = null; // os serviços dependem do tipo
+    });
+  }
+
+  void _selecionarUnidade(Unidade unidade) {
+    setState(() {
+      _unidade = unidade;
+      final tipo = _tipo;
+      final servico = _servico;
+      if (tipo != null &&
+          servico != null &&
+          !Catalogo.servicosDe(tipo, unidade: unidade).contains(servico)) {
+        _servico = null; // a unidade não atende esse serviço
+      }
     });
   }
 
@@ -89,6 +118,7 @@ class _NovoAgendamentoScreenState extends State<NovoAgendamentoScreen> {
               children: [
                 AppHeader(
                   titulo: 'Novo agendamento',
+                  subtitulo: widget.unidadeInicial?.nome,
                   onVoltar: () => Navigator.of(context).pop(),
                 ),
                 Expanded(
@@ -100,6 +130,7 @@ class _NovoAgendamentoScreenState extends State<NovoAgendamentoScreen> {
                         titulo: 'Tipo de atendimento',
                         child: _GradeTipos(
                           selecionado: tipo,
+                          disponivel: _tipoDisponivel,
                           onSelecionar: _selecionarTipo,
                         ),
                       ),
@@ -116,8 +147,10 @@ class _NovoAgendamentoScreenState extends State<NovoAgendamentoScreen> {
                                 spacing: 8,
                                 runSpacing: 8,
                                 children: [
-                                  for (final servico
-                                      in Catalogo.servicosDe(tipo))
+                                  for (final servico in Catalogo.servicosDe(
+                                    tipo,
+                                    unidade: _unidade,
+                                  ))
                                     OpcaoChip(
                                       rotulo: servico,
                                       selecionado: _servico == servico,
@@ -136,11 +169,14 @@ class _NovoAgendamentoScreenState extends State<NovoAgendamentoScreen> {
                             for (final unidade in Catalogo.unidades)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
-                                child: _TileUnidade(
+                                child: TileUnidade(
                                   unidade: unidade,
                                   selecionada: _unidade == unidade,
-                                  onTap: () =>
-                                      setState(() => _unidade = unidade),
+                                  motivoIndisponivel:
+                                      tipo != null && !unidade.oferece(tipo)
+                                          ? 'Não oferece ${tipo.rotulo}'
+                                          : null,
+                                  onTap: () => _selecionarUnidade(unidade),
                                 ),
                               ),
                           ],
@@ -238,36 +274,34 @@ class _Secao extends StatelessWidget {
 
 /// Grade 2x2 com os tipos de atendimento.
 class _GradeTipos extends StatelessWidget {
-  const _GradeTipos({required this.selecionado, required this.onSelecionar});
+  const _GradeTipos({
+    required this.selecionado,
+    required this.disponivel,
+    required this.onSelecionar,
+  });
 
   final TipoAtendimento? selecionado;
+  final bool Function(TipoAtendimento) disponivel;
   final ValueChanged<TipoAtendimento> onSelecionar;
 
   @override
   Widget build(BuildContext context) {
-    final tipos = TipoAtendimento.values;
+    const tipos = TipoAtendimento.values;
 
     Widget linha(TipoAtendimento a, TipoAtendimento b) {
+      Widget tile(TipoAtendimento tipo) => Expanded(
+            child: _TileTipo(
+              tipo: tipo,
+              selecionado: selecionado == tipo,
+              habilitado: disponivel(tipo),
+              onTap: () => onSelecionar(tipo),
+            ),
+          );
+
       return IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _TileTipo(
-                tipo: a,
-                selecionado: selecionado == a,
-                onTap: () => onSelecionar(a),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _TileTipo(
-                tipo: b,
-                selecionado: selecionado == b,
-                onTap: () => onSelecionar(b),
-              ),
-            ),
-          ],
+          children: [tile(a), const SizedBox(width: 10), tile(b)],
         ),
       );
     }
@@ -286,113 +320,58 @@ class _TileTipo extends StatelessWidget {
   const _TileTipo({
     required this.tipo,
     required this.selecionado,
+    required this.habilitado,
     required this.onTap,
   });
 
   final TipoAtendimento tipo;
   final bool selecionado;
+  final bool habilitado;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final ativo = selecionado && habilitado;
+
     return Semantics(
       button: true,
       selected: selecionado,
-      label: tipo.rotulo,
+      enabled: habilitado,
+      label: habilitado
+          ? tipo.rotulo
+          : '${tipo.rotulo}, não oferecido nesta unidade',
       excludeSemantics: true,
       child: Material(
-        color: selecionado ? AppColors.azulAbaInativa : Colors.white,
+        color: !habilitado
+            ? AppColors.fundo
+            : (ativo ? AppColors.azulAbaInativa : Colors.white),
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: BorderSide(
-            color:
-                selecionado ? AppColors.azulPrimario : AppColors.azulBordaCard,
+            color: ativo ? AppColors.azulPrimario : AppColors.azulBordaCard,
             width: 2,
           ),
         ),
         child: InkWell(
-          onTap: onTap,
+          onTap: habilitado ? onTap : null,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SvgPicture.asset(tipo.icone, width: 44, height: 44),
+                Opacity(
+                  opacity: habilitado ? 1 : 0.4,
+                  child: SvgPicture.asset(tipo.icone, width: 44, height: 44),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   tipo.rotulo,
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   style: AppText.opcao(
-                    AppColors.azulEscuro,
-                    peso: selecionado ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TileUnidade extends StatelessWidget {
-  const _TileUnidade({
-    required this.unidade,
-    required this.selecionada,
-    required this.onTap,
-  });
-
-  final Unidade unidade;
-  final bool selecionada;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selecionada,
-      label: '${unidade.nome}, ${unidade.endereco}',
-      excludeSemantics: true,
-      child: Material(
-        color: selecionada ? AppColors.azulAbaInativa : Colors.white,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color:
-                selecionada ? AppColors.azulPrimario : AppColors.azulBordaCard,
-            width: 2,
-          ),
-        ),
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Icon(
-                  selecionada
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  color: AppColors.azulPrimario,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        unidade.nome,
-                        style: AppText.opcao(
-                          AppColors.azulEscuro,
-                          peso: FontWeight.w600,
-                        ),
-                      ),
-                      Text(unidade.endereco, style: AppText.formAjuda),
-                    ],
+                    habilitado ? AppColors.azulEscuro : AppColors.iconeInativo,
+                    peso: ativo ? FontWeight.w600 : FontWeight.w500,
                   ),
                 ),
               ],

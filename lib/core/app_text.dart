@@ -86,4 +86,45 @@ abstract final class AppText {
       );
   static TextStyle get snack =>
       _poppins(14, FontWeight.w400, Colors.white, height: 1.4);
+
+  // Rede de saúde
+  static TextStyle get unidadeNome =>
+      _poppins(17, FontWeight.w600, AppColors.azulEscuro, height: 1.3);
+  static TextStyle get distancia =>
+      _poppins(13, FontWeight.w600, AppColors.azulPrimario, height: 1.3);
+  static TextStyle get tag =>
+      _poppins(12, FontWeight.w500, AppColors.azulTexto, height: 1.3);
+
+  // Campos de texto
+  static TextStyle get campo =>
+      _poppins(15, FontWeight.w400, AppColors.azulEscuro, height: 1.4);
+  static TextStyle get campoRotulo =>
+      _poppins(14, FontWeight.w400, AppColors.textoSecundario);
+  static TextStyle get campoErro =>
+      _poppins(12, FontWeight.w400, AppColors.canceladoTexto, height: 1.3);
+
+  // Cartão SUS Digital (texto branco sobre o gradiente azul)
+  static TextStyle get cartaoTitulo => GoogleFonts.poppins(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+        letterSpacing: 1,
+      );
+  static TextStyle get cartaoRotulo => GoogleFonts.poppins(
+        fontSize: 10,
+        fontWeight: FontWeight.w500,
+        color: AppColors.brancoSuave,
+        letterSpacing: 0.6,
+      );
+  static TextStyle get cartaoNome =>
+      _poppins(18, FontWeight.w700, Colors.white, height: 1.3);
+  static TextStyle get cartaoCns => GoogleFonts.poppins(
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+        letterSpacing: 1.6,
+        height: 1.3,
+      );
+  static TextStyle get cartaoValor =>
+      _poppins(13, FontWeight.w600, Colors.white, height: 1.3);
 }

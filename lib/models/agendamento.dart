@@ -1,20 +1,8 @@
+import 'tipo_atendimento.dart';
 import 'unidade.dart';
 
-/// Tipo de atendimento escolhido no formulário de novo agendamento.
-enum TipoAtendimento {
-  consulta('Consulta Médica', 'Especialidade'),
-  exame('Exame Laboratorial', 'Exame'),
-  vacinacao('Vacinação', 'Vacina'),
-  receita('Renovação de Receita', 'Serviço');
-
-  const TipoAtendimento(this.rotulo, this.rotuloServico);
-
-  /// Nome exibido ao usuário.
-  final String rotulo;
-
-  /// Título da etapa "especialidade/serviço" para este tipo.
-  final String rotuloServico;
-}
+// Quem importa o modelo de agendamento também enxerga TipoAtendimento.
+export 'tipo_atendimento.dart';
 
 enum StatusAgendamento {
   confirmado('Confirmado'),
@@ -89,6 +77,29 @@ class Agendamento {
       orientacoes: orientacoes,
     );
   }
+
+  /// Converte para um mapa pronto para `jsonEncode` / banco de dados.
+  Map<String, dynamic> toJson() => {
+        'protocolo': protocolo,
+        'tipo': tipo.name,
+        'servico': servico,
+        'unidade': unidade.toJson(),
+        'profissional': profissional,
+        'dataHora': dataHora.toIso8601String(),
+        'status': status.name,
+        'orientacoes': orientacoes,
+      };
+
+  factory Agendamento.fromJson(Map<String, dynamic> json) => Agendamento(
+        protocolo: json['protocolo'] as String,
+        tipo: TipoAtendimento.values.byName(json['tipo'] as String),
+        servico: json['servico'] as String,
+        unidade: Unidade.fromJson(json['unidade'] as Map<String, dynamic>),
+        profissional: json['profissional'] as String,
+        dataHora: DateTime.parse(json['dataHora'] as String),
+        status: StatusAgendamento.values.byName(json['status'] as String),
+        orientacoes: List<String>.from(json['orientacoes'] as List),
+      );
 
   static String _dois(int n) => n.toString().padLeft(2, '0');
 }

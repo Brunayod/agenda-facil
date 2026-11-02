@@ -15,6 +15,7 @@ abstract final class AppColors {
   static const azulOnda = Color(0xFFDDEEFF);
   static const azulBordaCard = Color(0xFFD9E8F7);
   static const azulAbaInativa = Color(0xFFEAF3FF);
+  static const azulCirculo = Color(0xFFCFE5FA);
 
   // Textos / ícones neutros
   static const textoSecundario = Color(0xFF6B7E95);
@@ -33,4 +34,8 @@ abstract final class AppColors {
   static const naoCompareceuTexto = Color(0xFF6638B8);
   static const canceladoFundo = Color(0xFFFDE8E8);
   static const canceladoTexto = Color(0xFFB3261E);
+
+  // Cartão SUS Digital
+  static const brancoSuave = Color(0xB3FFFFFF); // branco a 70%
+  static const cartaoMarca = Color(0x14FFFFFF); // branco a 8%
 }

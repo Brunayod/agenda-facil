@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../data/paciente_repository.dart';
 import '../models/agendamento.dart';
+import '../models/unidade.dart';
 import '../widgets/abas_agenda.dart';
 import '../widgets/app_background.dart';
 import '../widgets/app_bottom_nav.dart';
 import '../widgets/app_snack_bar.dart';
-import 'em_construcao_screen.dart';
 import 'home_screen.dart';
 import 'meus_agendamentos_screen.dart';
 import 'novo_agendamento_screen.dart';
+import 'perfil_screen.dart';
+import 'rede_screen.dart';
 
 /// Estrutura fixa do app: fundo decorativo + página atual + barra inferior.
 class AppShell extends StatefulWidget {
@@ -19,7 +22,8 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  // Índices das abas da barra inferior (Perfil = 3, última página da pilha).
+  // Índices das abas da barra inferior (mesma ordem do IndexedStack;
+  // Perfil é o índice 3 e só é acessado pela própria barra).
   static const _inicio = 0;
   static const _agenda = 1;
   static const _rede = 2;
@@ -37,10 +41,14 @@ class _AppShellState extends State<AppShell> {
 
   void _ir(int indice) => setState(() => _indice = indice);
 
-  Future<void> _novoAgendamento() async {
+  /// Abre o formulário de novo agendamento. Com [unidade], a UBS já vem
+  /// selecionada (usado pelo botão "Agendar nesta unidade" da aba Rede).
+  Future<void> _novoAgendamento({Unidade? unidade}) async {
     final messenger = ScaffoldMessenger.of(context);
     final criado = await Navigator.of(context).push<Agendamento>(
-      MaterialPageRoute(builder: (context) => const NovoAgendamentoScreen()),
+      MaterialPageRoute(
+        builder: (context) => NovoAgendamentoScreen(unidadeInicial: unidade),
+      ),
     );
     if (criado == null || !mounted) return;
 
@@ -66,24 +74,26 @@ class _AppShellState extends State<AppShell> {
                   child: IndexedStack(
                     index: _indice,
                     children: [
-                      HomeScreen(
-                        nomeUsuario: 'Jheniffer',
-                        onNovaConsulta: _novoAgendamento,
-                        onMeusAgendamentos: () => _ir(_agenda),
-                        onRedeDeSaude: () => _ir(_rede),
+                      ListenableBuilder(
+                        listenable: PacienteRepository.instance,
+                        builder: (context, _) => HomeScreen(
+                          nomeUsuario:
+                              PacienteRepository.instance.paciente.primeiroNome,
+                          onNovaConsulta: _novoAgendamento,
+                          onMeusAgendamentos: () => _ir(_agenda),
+                          onRedeDeSaude: () => _ir(_rede),
+                        ),
                       ),
                       MeusAgendamentosScreen(
                         aba: _abaAgenda,
                         onVoltar: () => _ir(_inicio),
                       ),
-                      EmConstrucaoScreen(
-                        titulo: 'Rede de saúde',
+                      RedeScreen(
                         onVoltar: () => _ir(_inicio),
+                        onAgendar: (unidade) =>
+                            _novoAgendamento(unidade: unidade),
                       ),
-                      EmConstrucaoScreen(
-                        titulo: 'Perfil',
-                        onVoltar: () => _ir(_inicio),
-                      ),
+                      PerfilScreen(onVoltar: () => _ir(_inicio)),
                     ],
                   ),
                 ),

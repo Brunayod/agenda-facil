@@ -5,8 +5,14 @@
 - **Novo agendamento** (botão central SUS, card da Home ou "Agendar nesta unidade"): tipo, serviço (dinâmico), unidade, data e horário.
 - **Meus agendamentos**: Agenda ativa / Histórico em tempo real; detalhes, reagendar e cancelar.
 - **Rede**: 5 UBS com busca por nome/bairro, filtro por tipo de atendimento, detalhes com profissionais e botão de agendar na unidade.
-- **Login e cadastro**: entrada por CPF ou Cartão SUS + senha (mostrar/ocultar), "Criar minha conta" (nome, CPF, CNS, nascimento, tipo sanguíneo, telefone, e-mail, UBS de referência e senha) e "Acesso Rápido (Demo Banca)", que entra como Jheniffer Almeida Santos. Conta de demonstração: CPF `123.456.789-09`, senha `demo123`.
-- **Perfil**: Cartão SUS Digital (toque para ampliar com QR Code/código de barras ilustrativos), resumo de saúde (alergias e condições editáveis), dados cadastrais editáveis e preferências (lembretes e tamanho do texto); botão **Sair da conta** (com confirmação) no final da página.
+- **Perfil**: Cartão SUS Digital (toque para ampliar com QR Code/código de barras ilustrativos), resumo de saúde (alergias e condições editáveis), dados cadastrais editáveis e preferências (lembretes e tamanho do texto).
+
+## Acesso e persistência
+- Login por **CPF ou CNS** + senha; "Criar minha conta" faz o cadastro completo; "Acesso Rápido (Demo Banca)" entra como Jheniffer.
+- Conta de demonstração: CPF `123.456.789-09` (ou CNS `700 1234 5678 9010`), senha `agenda123`.
+- Sessão, contas, paciente e agendamentos são salvos em JSON com `shared_preferences` (dispositivo/navegador). No primeiro acesso grava os dados de demonstração.
+- Senhas guardadas só como hash SHA-256 com sal (proteção básica local; a autenticação real deve ficar no servidor).
+- Para zerar os dados no navegador: limpe os dados do site (localhost) nas ferramentas do Chrome.
 
 ## Como rodar
 ```bash
@@ -18,25 +24,17 @@ flutter run -d chrome
 ## Estrutura
 ```
 lib/
-  core/      cores, textos (Poppins), tema, campos de formulário, máscaras e validadores, assets
+  core/      cores, textos (Poppins), tema, campos de formulário, assets
   models/    Agendamento, Paciente, Unidade, Profissional, TipoAtendimento (todos com toJson/fromJson quando aplicável)
-  data/      catalogo.dart (UBS, serviços, horários, orientações)
-             agendamento_repository.dart e paciente_repository.dart (estado reativo + persistência local, sessão e contas)
+  data/      catalogo.dart (UBS, serviços, horários, orientações) · dados_demo.dart (seed)
+             armazenamento.dart (interface Armazenamento + implementação local)
+             sessao_repository.dart · paciente_repository.dart · agendamento_repository.dart
   widgets/   componentes reutilizáveis (header, nav, cards, chips, sheets, cartão SUS...)
   screens/   home, rede, perfil, novo agendamento, meus agendamentos, shell
 ```
 
-## Persistência (`shared_preferences`)
-Tudo é salvo automaticamente no aparelho (no navegador, `localStorage`):
-- `af.contas` — contas cadastradas (`Paciente.toJson()` + senha com hash e salt). Alterações de dados, alergias, condições e preferências de acessibilidade são gravadas aqui.
-- `af.sessao` — CPF do paciente logado; ao reabrir o app a sessão é restaurada.
-- `af.agendamentos.<cpf>` — agendamentos de cada paciente (criados, remarcados e cancelados) via `Agendamento.toJson()/fromJson()`.
-- `af.sequencia` — contador dos protocolos.
-
-Na primeira abertura a conta demo (Jheniffer) é criada com os agendamentos de demonstração. Novas contas começam sem agendamentos. Ao reabrir, agendamentos "Confirmado" cuja data já passou viram "Realizado".
-Para zerar os dados no Chrome: DevTools → Application → Local Storage → Clear.
-
-> O hash de senha é didático (protótipo sem servidor). Em produção use uma API (ex.: login gov.br) com bcrypt/argon2.
+## Próximo passo: nuvem
+Os repositórios só dependem da interface `Armazenamento` (ler/gravar/remover). Para sincronizar com um banco em nuvem, crie outra implementação (ou um repositório remoto) e troque no `main.dart`; as telas não mudam.
 
 ## Observações
 - Endereços, telefones, distâncias, profissionais, orientações e dados do paciente são EXEMPLOS fictícios.

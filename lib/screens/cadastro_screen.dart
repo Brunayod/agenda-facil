@@ -3,21 +3,22 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/app_input.dart';
 import '../core/app_text.dart';
-import '../core/formatadores.dart';
+import '../core/mascaras.dart';
 import '../core/validadores.dart';
 import '../data/catalogo.dart';
-import '../data/paciente_repository.dart';
+import '../data/sessao_repository.dart';
 import '../models/paciente.dart';
 import '../widgets/app_background.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_snack_bar.dart';
-import '../widgets/aviso_erro.dart';
 import '../widgets/botao_app.dart';
+import '../widgets/campo_senha.dart';
 import '../widgets/opcao_chip.dart';
 import '../widgets/secao_card.dart';
 import '../widgets/tile_unidade.dart';
 
-/// Cadastro de novo paciente. Ao concluir, volta e já entra na conta criada.
+/// Cadastro de novo paciente. Ao concluir, a conta é criada e o usuário
+/// já entra no app.
 class CadastroScreen extends StatefulWidget {
   const CadastroScreen({super.key});
 
@@ -26,17 +27,6 @@ class CadastroScreen extends StatefulWidget {
 }
 
 class _CadastroScreenState extends State<CadastroScreen> {
-  static const _tiposSanguineos = [
-    'A+',
-    'A-',
-    'B+',
-    'B-',
-    'AB+',
-    'AB-',
-    'O+',
-    'O-',
-  ];
-
   final _formKey = GlobalKey<FormState>();
   final _nome = TextEditingController();
   final _cpf = TextEditingController();
@@ -44,15 +34,13 @@ class _CadastroScreenState extends State<CadastroScreen> {
   final _nascimento = TextEditingController();
   final _telefone = TextEditingController();
   final _email = TextEditingController();
+  final _endereco = TextEditingController();
   final _senha = TextEditingController();
-  final _confirmar = TextEditingController();
+  final _confirmacao = TextEditingController();
 
   String? _tipoSanguineo;
   String? _unidadeId;
-
-  bool _tentou = false;
-  bool _verSenha = false;
-  bool _verConfirmar = false;
+  bool _tentouEnviar = false;
   bool _salvando = false;
   String? _erro;
 
@@ -64,47 +52,55 @@ class _CadastroScreenState extends State<CadastroScreen> {
     _nascimento.dispose();
     _telefone.dispose();
     _email.dispose();
+    _endereco.dispose();
     _senha.dispose();
-    _confirmar.dispose();
+    _confirmacao.dispose();
     super.dispose();
   }
 
-  Future<void> _criar() async {
-    if (_salvando) return;
-    setState(() {
-      _tentou = true;
-      _erro = null;
-    });
+  Future<void> _criarConta() async {
+    setState(() => _tentouEnviar = true);
 
-    final camposOk = _formKey.currentState?.validate() ?? false;
-    final tipo = _tipoSanguineo;
+    final formularioOk = _formKey.currentState?.validate() ?? false;
+    final tipoSanguineo = _tipoSanguineo;
     final unidadeId = _unidadeId;
-    if (!camposOk || tipo == null || unidadeId == null) {
-      setState(() => _erro = 'Revise os campos destacados em vermelho.');
+    final nascimento = Validadores.dataNascimento(_nascimento.text);
+    if (!formularioOk ||
+        tipoSanguineo == null ||
+        unidadeId == null ||
+        nascimento == null) {
       return;
     }
 
-    setState(() => _salvando = true);
-    final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final endereco = _endereco.text.trim();
+
+    setState(() {
+      _salvando = true;
+      _erro = null;
+    });
 
     final paciente = Paciente(
       nome: _nome.text.trim(),
-      cns: Validadores.digitos(_cns.text),
-      cpf: Validadores.digitos(_cpf.text),
-      dataNascimento: Validadores.converterData(_nascimento.text)!,
-      tipoSanguineo: tipo,
+      cns: Mascaras.apenasDigitos(_cns.text),
+      cpf: Mascaras.apenasDigitos(_cpf.text),
+      dataNascimento: nascimento,
+      tipoSanguineo: tipoSanguineo,
       telefone: _telefone.text.trim(),
       email: _email.text.trim(),
-      endereco: Paciente.enderecoNaoInformado,
+      endereco: endereco.isEmpty ? 'Não informado' : endereco,
       unidadeReferenciaId: unidadeId,
       alergias: const [],
       condicoes: const [],
     );
 
-    final repo = PacienteRepository.instance;
-    final erro = await repo.cadastrar(paciente: paciente, senha: _senha.text);
+    final erro = await SessaoRepository.instance.cadastrar(
+      paciente: paciente,
+      senha: _senha.text,
+    );
     if (!mounted) return;
+
     if (erro != null) {
       setState(() {
         _salvando = false;
@@ -113,44 +109,43 @@ class _CadastroScreenState extends State<CadastroScreen> {
       return;
     }
 
-    // Fecha o cadastro primeiro; ao iniciar a sessão o app troca o login
-    // pela Home sozinho.
+    // A sessão já está ativa: o AppRaiz mostra o app atrás desta tela.
     navigator.pop();
-    await repo.iniciarSessao(paciente.cpf);
-    AppSnackBar.mostrar(
-      messenger,
-      'Conta criada! Bem-vindo(a), ${paciente.primeiroNome}.',
-    );
+    AppSnackBar.mostrar(messenger, 'Conta criada! Você já está conectado.');
   }
 
-  InputDecoration _decoracao(
-    String rotulo,
-    IconData icone, {
+  Widget _campo({
+    required TextEditingController controller,
+    required String rotulo,
+    required IconData icone,
+    required FormFieldValidator<String> validator,
+    TextInputType? teclado,
+    TextInputAction acao = TextInputAction.next,
+    List<MascaraInput> mascaras = const [],
+    TextCapitalization capitalizacao = TextCapitalization.none,
     String? dica,
-    Widget? sufixo,
   }) {
-    return CampoDecoracao.criar(
-      rotulo: rotulo,
-      dica: dica,
-      sufixo: sufixo,
-      prefixo: Icon(icone, color: AppColors.azulPrimario),
-    );
-  }
-
-  Widget _botaoOlho({required bool visivel, required VoidCallback onTap}) {
-    return IconButton(
-      onPressed: onTap,
-      tooltip: visivel ? 'Ocultar senha' : 'Mostrar senha',
-      icon: Icon(
-        visivel ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-        color: AppColors.textoSecundario,
+    return TextFormField(
+      controller: controller,
+      keyboardType: teclado,
+      textInputAction: acao,
+      textCapitalization: capitalizacao,
+      inputFormatters: mascaras,
+      validator: validator,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      style: AppText.campo,
+      decoration: CampoDecoracao.criar(
+        rotulo: rotulo,
+        dica: dica,
+        prefixo: Icon(icone, color: AppColors.azulPrimario),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    const auto = AutovalidateMode.onUserInteraction;
+    final inferior = MediaQuery.paddingOf(context).bottom;
+    const espaco = SizedBox(height: 14);
 
     return Scaffold(
       body: Stack(
@@ -162,226 +157,235 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 AppHeader(
                   titulo: 'Criar conta',
                   subtitulo: 'Cadastro de novo paciente',
-                  onVoltar: () => Navigator.of(context).maybePop(),
+                  onVoltar: () => Navigator.of(context).pop(),
                 ),
                 Expanded(
-                  child: Form(
-                    key: _formKey,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-                      children: [
-                        SecaoCard(
-                          titulo: 'Dados pessoais',
-                          icone: Icons.person_outline,
-                          child: Column(
-                            children: [
-                              TextFormField(
-                                controller: _nome,
-                                keyboardType: TextInputType.name,
-                                textCapitalization: TextCapitalization.words,
-                                textInputAction: TextInputAction.next,
-                                style: AppText.campo,
-                                validator: Validadores.nome,
-                                autovalidateMode: auto,
-                                decoration: _decoracao(
-                                  'Nome completo',
-                                  Icons.person_outline,
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: _cpf,
-                                keyboardType: TextInputType.number,
-                                textInputAction: TextInputAction.next,
-                                inputFormatters: const [FormatoCpf()],
-                                style: AppText.campo,
-                                validator: Validadores.cpf,
-                                autovalidateMode: auto,
-                                decoration: _decoracao(
-                                  'CPF',
-                                  Icons.badge_outlined,
-                                  dica: '000.000.000-00',
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: _cns,
-                                keyboardType: TextInputType.number,
-                                textInputAction: TextInputAction.next,
-                                inputFormatters: const [FormatoCns()],
-                                style: AppText.campo,
-                                validator: Validadores.cns,
-                                autovalidateMode: auto,
-                                decoration: _decoracao(
-                                  'Cartão SUS (CNS)',
-                                  Icons.credit_card_outlined,
-                                  dica: '000 0000 0000 0000',
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: _nascimento,
-                                keyboardType: TextInputType.number,
-                                textInputAction: TextInputAction.next,
-                                inputFormatters: const [FormatoData()],
-                                style: AppText.campo,
-                                validator: Validadores.dataNascimento,
-                                autovalidateMode: auto,
-                                decoration: _decoracao(
-                                  'Data de nascimento',
-                                  Icons.cake_outlined,
-                                  dica: 'dd/mm/aaaa',
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: _telefone,
-                                keyboardType: TextInputType.phone,
-                                textInputAction: TextInputAction.next,
-                                inputFormatters: const [FormatoTelefone()],
-                                style: AppText.campo,
-                                validator: Validadores.telefone,
-                                autovalidateMode: auto,
-                                decoration: _decoracao(
-                                  'Telefone',
-                                  Icons.phone_outlined,
-                                  dica: '(00) 00000-0000',
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: _email,
-                                keyboardType: TextInputType.emailAddress,
-                                textInputAction: TextInputAction.done,
-                                style: AppText.campo,
-                                validator: Validadores.email,
-                                autovalidateMode: auto,
-                                decoration: _decoracao(
-                                  'E-mail',
-                                  Icons.mail_outline,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SecaoCard(
-                          titulo: 'Saúde e atendimento',
-                          icone: Icons.favorite_border,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Tipo sanguíneo', style: AppText.formRotulo),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
+                  child: ListView(
+                    padding: EdgeInsets.fromLTRB(16, 20, 16, 24 + inferior),
+                    children: [
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            SecaoCard(
+                              titulo: 'Dados pessoais',
+                              icone: Icons.person_outline,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  for (final tipo in _tiposSanguineos)
-                                    OpcaoChip(
-                                      rotulo: tipo,
-                                      selecionado: _tipoSanguineo == tipo,
-                                      onTap: () =>
-                                          setState(() => _tipoSanguineo = tipo),
+                                  _campo(
+                                    controller: _nome,
+                                    rotulo: 'Nome completo',
+                                    icone: Icons.badge_outlined,
+                                    capitalizacao: TextCapitalization.words,
+                                    validator: (v) =>
+                                        (v ?? '').trim().split(RegExp(r'\s+')).length <
+                                                2
+                                            ? 'Informe nome e sobrenome.'
+                                            : null,
+                                  ),
+                                  espaco,
+                                  _campo(
+                                    controller: _cpf,
+                                    rotulo: 'CPF',
+                                    icone: Icons.credit_card,
+                                    teclado: TextInputType.number,
+                                    mascaras: const [
+                                      MascaraInput(Mascaras.cpf, maxDigitos: 11),
+                                    ],
+                                    validator: (v) => Validadores.cpfValido(v ?? '')
+                                        ? null
+                                        : 'CPF inválido.',
+                                  ),
+                                  espaco,
+                                  _campo(
+                                    controller: _cns,
+                                    rotulo: 'Cartão SUS (CNS)',
+                                    icone: Icons.health_and_safety_outlined,
+                                    teclado: TextInputType.number,
+                                    mascaras: const [
+                                      MascaraInput(Mascaras.cns, maxDigitos: 15),
+                                    ],
+                                    validator: (v) => Validadores.cnsValido(v ?? '')
+                                        ? null
+                                        : 'Cartão SUS (CNS) inválido.',
+                                  ),
+                                  espaco,
+                                  _campo(
+                                    controller: _nascimento,
+                                    rotulo: 'Data de nascimento',
+                                    dica: 'dd/mm/aaaa',
+                                    icone: Icons.cake_outlined,
+                                    teclado: TextInputType.number,
+                                    mascaras: const [
+                                      MascaraInput(Mascaras.data, maxDigitos: 8),
+                                    ],
+                                    validator: (v) =>
+                                        Validadores.dataNascimento(v ?? '') == null
+                                            ? 'Informe uma data válida.'
+                                            : null,
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Text('Tipo sanguíneo', style: AppText.formRotulo),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      for (final tipo in Catalogo.tiposSanguineos)
+                                        OpcaoChip(
+                                          rotulo: tipo,
+                                          selecionado: _tipoSanguineo == tipo,
+                                          onTap: () => setState(
+                                            () => _tipoSanguineo = tipo,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  if (_tentouEnviar && _tipoSanguineo == null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Text(
+                                        'Escolha seu tipo sanguíneo.',
+                                        style: AppText.campoErro,
+                                      ),
                                     ),
                                 ],
                               ),
-                              if (_tentou && _tipoSanguineo == null) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Selecione o tipo sanguíneo.',
-                                  style: AppText.campoErro,
+                            ),
+                            const SizedBox(height: 12),
+                            SecaoCard(
+                              titulo: 'Contato',
+                              icone: Icons.contact_phone_outlined,
+                              child: Column(
+                                children: [
+                                  _campo(
+                                    controller: _telefone,
+                                    rotulo: 'Telefone',
+                                    icone: Icons.phone_outlined,
+                                    teclado: TextInputType.phone,
+                                    mascaras: const [
+                                      MascaraInput(
+                                        Mascaras.telefone,
+                                        maxDigitos: 11,
+                                      ),
+                                    ],
+                                    validator: (v) =>
+                                        Validadores.telefoneValido(v ?? '')
+                                            ? null
+                                            : 'Informe o telefone com DDD.',
+                                  ),
+                                  espaco,
+                                  _campo(
+                                    controller: _email,
+                                    rotulo: 'E-mail',
+                                    icone: Icons.mail_outline,
+                                    teclado: TextInputType.emailAddress,
+                                    validator: (v) =>
+                                        Validadores.emailValido(v ?? '')
+                                            ? null
+                                            : 'Informe um e-mail válido.',
+                                  ),
+                                  espaco,
+                                  _campo(
+                                    controller: _endereco,
+                                    rotulo: 'Endereço (opcional)',
+                                    icone: Icons.home_outlined,
+                                    teclado: TextInputType.streetAddress,
+                                    capitalizacao: TextCapitalization.words,
+                                    validator: (_) => null,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SecaoCard(
+                              titulo: 'UBS de referência',
+                              icone: Icons.local_hospital_outlined,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  for (final unidade in Catalogo.unidades)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: TileUnidade(
+                                        unidade: unidade,
+                                        selecionada: unidade.id == _unidadeId,
+                                        onTap: () => setState(
+                                          () => _unidadeId = unidade.id,
+                                        ),
+                                      ),
+                                    ),
+                                  if (_tentouEnviar && _unidadeId == null)
+                                    Text(
+                                      'Escolha sua UBS de referência.',
+                                      style: AppText.campoErro,
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SecaoCard(
+                              titulo: 'Senha de acesso',
+                              icone: Icons.lock_outline,
+                              child: Column(
+                                children: [
+                                  CampoSenha(
+                                    controller: _senha,
+                                    rotulo: 'Senha (mínimo 6 caracteres)',
+                                    textInputAction: TextInputAction.next,
+                                    validator: (v) => (v ?? '').length < 6
+                                        ? 'Use pelo menos 6 caracteres.'
+                                        : null,
+                                  ),
+                                  espaco,
+                                  CampoSenha(
+                                    controller: _confirmacao,
+                                    rotulo: 'Confirmar senha',
+                                    validator: (v) => v != _senha.text
+                                        ? 'As senhas não coincidem.'
+                                        : null,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_erro != null) ...[
+                        const SizedBox(height: 12),
+                        Semantics(
+                          liveRegion: true,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.canceladoFundo,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.error_outline,
+                                  size: 20,
+                                  color: AppColors.canceladoTexto,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(_erro!, style: AppText.erroForm),
                                 ),
                               ],
-                              const SizedBox(height: 18),
-                              Text(
-                                'UBS de referência',
-                                style: AppText.formRotulo,
-                              ),
-                              const SizedBox(height: 8),
-                              for (final unidade in Catalogo.unidades)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: TileUnidade(
-                                    unidade: unidade,
-                                    selecionada: unidade.id == _unidadeId,
-                                    onTap: () =>
-                                        setState(() => _unidadeId = unidade.id),
-                                  ),
-                                ),
-                              if (_tentou && _unidadeId == null)
-                                Text(
-                                  'Selecione sua UBS de referência.',
-                                  style: AppText.campoErro,
-                                ),
-                            ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        SecaoCard(
-                          titulo: 'Senha de acesso',
-                          icone: Icons.lock_outline,
-                          child: Column(
-                            children: [
-                              TextFormField(
-                                controller: _senha,
-                                obscureText: !_verSenha,
-                                enableSuggestions: false,
-                                autocorrect: false,
-                                textInputAction: TextInputAction.next,
-                                style: AppText.campo,
-                                validator: Validadores.senha,
-                                autovalidateMode: auto,
-                                decoration: _decoracao(
-                                  'Senha',
-                                  Icons.lock_outline,
-                                  dica: 'Mínimo de 6 caracteres',
-                                  sufixo: _botaoOlho(
-                                    visivel: _verSenha,
-                                    onTap: () =>
-                                        setState(() => _verSenha = !_verSenha),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              TextFormField(
-                                controller: _confirmar,
-                                obscureText: !_verConfirmar,
-                                enableSuggestions: false,
-                                autocorrect: false,
-                                textInputAction: TextInputAction.done,
-                                onFieldSubmitted: (_) => _criar(),
-                                style: AppText.campo,
-                                validator: (valor) => valor == _senha.text
-                                    ? null
-                                    : 'As senhas não conferem.',
-                                autovalidateMode: auto,
-                                decoration: _decoracao(
-                                  'Confirmar senha',
-                                  Icons.lock_outline,
-                                  sufixo: _botaoOlho(
-                                    visivel: _verConfirmar,
-                                    onTap: () => setState(
-                                      () => _verConfirmar = !_verConfirmar,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        if (_erro != null) ...[
-                          AvisoErro(texto: _erro!),
-                          const SizedBox(height: 14),
-                        ],
-                        BotaoApp(
-                          rotulo: _salvando ? 'Criando conta...' : 'Criar conta',
-                          icone: _salvando ? null : Icons.check,
-                          onPressed: _salvando ? null : _criar,
                         ),
                       ],
-                    ),
+                      const SizedBox(height: 16),
+                      BotaoApp(
+                        rotulo: 'Criar conta',
+                        icone: Icons.check,
+                        carregando: _salvando,
+                        onPressed: _salvando ? null : _criarConta,
+                      ),
+                    ],
                   ),
                 ),
               ],

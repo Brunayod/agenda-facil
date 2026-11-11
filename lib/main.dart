@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'core/app_theme.dart';
+import 'data/catalogo.dart';
 import 'data/paciente_repository.dart';
-import 'screens/app_shell.dart';
-import 'screens/login_screen.dart';
+import 'data/sessao_repository.dart';
+import 'data/supabase_config.dart';
+import 'screens/app_raiz.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,8 +17,17 @@ Future<void> main() async {
       statusBarBrightness: Brightness.dark, // iOS
     ),
   );
-  // Lê contas, sessão e agendamentos salvos antes de desenhar a primeira tela.
-  await PacienteRepository.instance.carregar();
+
+  // Conecta ao Supabase (a sessão do usuário é restaurada automaticamente).
+  await SupabaseConfig.inicializar();
+
+  // Unidades, serviços e horários vêm do banco (com dados de exemplo se
+  // estiver sem internet).
+  await Catalogo.carregar();
+
+  // Se já havia login salvo, carrega o paciente e os agendamentos.
+  await SessaoRepository.instance.inicializar();
+
   runApp(const AgendaFacilApp());
 }
 
@@ -30,45 +41,31 @@ class AgendaFacilApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       // Aplica a preferência "Tamanho do texto" do perfil em todo o app,
-      // somada à escala de fonte do sistema.
+      // somada à escala de fonte do sistema (só com sessão ativa).
       builder: (context, child) {
         return ListenableBuilder(
-          listenable: PacienteRepository.instance,
+          listenable: Listenable.merge([
+            SessaoRepository.instance,
+            PacienteRepository.instance,
+          ]),
           builder: (context, _) {
+            final sessao = SessaoRepository.instance;
+            final pacientes = PacienteRepository.instance;
+            final fator = sessao.logado && pacientes.temPaciente
+                ? pacientes.paciente.tamanhoTexto.fator
+                : 1.0;
+
             final media = MediaQuery.of(context);
-            final fator = PacienteRepository.instance.tamanhoTexto.fator;
             return MediaQuery(
               data: media.copyWith(
-                textScaler: TextScaler.linear(
-                  media.textScaler.scale(1) * fator,
-                ),
+                textScaler: TextScaler.linear(media.textScaler.scale(1) * fator),
               ),
               child: child ?? const SizedBox.shrink(),
             );
           },
         );
       },
-      home: const _PortaDeEntrada(),
-    );
-  }
-}
-
-/// Decide a tela inicial pela sessão: logado vê o app, deslogado vê o login.
-/// Ao entrar ou sair, a troca acontece sozinha (o repositório avisa).
-class _PortaDeEntrada extends StatelessWidget {
-  const _PortaDeEntrada();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: PacienteRepository.instance,
-      builder: (context, _) {
-        // Troca direta (sem animação): ao sair, o AppShell precisa sumir na
-        // hora, pois suas telas só funcionam com um paciente logado.
-        return PacienteRepository.instance.logado
-            ? const AppShell()
-            : const LoginScreen();
-      },
+      home: const AppRaiz(),
     );
   }
 }

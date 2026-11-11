@@ -1,96 +1,75 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/agendamento.dart';
 import '../models/unidade.dart';
+import 'cache_local.dart';
 import 'catalogo.dart';
+import 'erros.dart';
+import 'supabase_config.dart';
 
-/// Repositório (singleton) dos agendamentos do paciente logado.
+/// Repositório (singleton) dos agendamentos do paciente com sessão ativa.
 ///
-/// É um [ChangeNotifier]: telas que usam `ListenableBuilder` são
-/// reconstruídas automaticamente ao adicionar, cancelar ou reagendar.
-///
-/// Cada paciente tem a própria lista, salva em `shared_preferences` na chave
-/// `af.agendamentos.<cpf>`. Quem chama [carregarPara] (o login) escolhe de
-/// quem são os dados; [descarregar] (o logout) esvazia a memória sem apagar
-/// o que está salvo.
+/// É um [ChangeNotifier]: telas com `ListenableBuilder` são reconstruídas ao
+/// adicionar, cancelar ou reagendar. Os dados ficam na tabela `agendamentos`
+/// do Supabase; o protocolo e o status inicial são definidos pelo banco.
+/// Erros (regras dos triggers, rede) são lançados para a tela tratar.
 class AgendamentoRepository extends ChangeNotifier {
   AgendamentoRepository._();
 
   static final AgendamentoRepository instance = AgendamentoRepository._();
 
-  static const _prefixoChave = 'af.agendamentos.';
-  static const _chaveSequencia = 'af.sequencia';
+  /// Agendamento + nome do serviço, orientações e profissional.
+  /// (A unidade vem do [Catalogo], pois não há FK direta para `unidades`.)
+  static const _colunas = '*, servicos(nome, orientacoes), profissionais(nome)';
 
   final List<Agendamento> _itens = [];
 
-  /// Contador global de protocolos (nunca repete entre pacientes).
-  int _sequencia = 1000;
+  /// Carrega os agendamentos do usuário autenticado (a RLS filtra).
+  Future<void> carregar() async {
+    final usuarioId = supabase.auth.currentUser?.id;
+    try {
+      final linhas = await supabase
+          .from('agendamentos')
+          .select(_colunas)
+          .order('data_hora', ascending: true);
 
-  /// CPF do paciente dono da lista atual (`null` = ninguém logado).
-  String? _cpf;
-
-  /// Carrega do disco os agendamentos de [cpf]. Se não houver nada salvo e
-  /// [semearSeVazio] for `true`, cria os dados de demonstração.
-  Future<void> carregarPara(String cpf, {bool semearSeVazio = false}) async {
-    final prefs = await SharedPreferences.getInstance();
-    _cpf = cpf;
-    _itens.clear();
-    _sequencia = prefs.getInt(_chaveSequencia) ?? 1000;
-
-    var encontrou = false;
-    final bruto = prefs.getString('$_prefixoChave$cpf');
-    if (bruto != null) {
-      try {
-        final mapa = jsonDecode(bruto) as Map<String, dynamic>;
-        _itens.addAll(
-          (mapa['itens'] as List)
-              .map((e) => Agendamento.fromJson(e as Map<String, dynamic>)),
+      _itens
+        ..clear()
+        ..addAll(linhas.map(_dePostgrest));
+      await _salvarCache();
+    } catch (erro) {
+      // Erro do banco (RLS, coluna...) deve aparecer; só falha de rede cai
+      // na cópia local.
+      if (erro is PostgrestException || usuarioId == null) rethrow;
+      final copia = await CacheLocal.ler('agendamentos', usuarioId);
+      if (copia is! List) rethrow;
+      debugPrint(
+        'AgendamentoRepository: sem conexão ($erro); usando cópia local.',
+      );
+      _itens
+        ..clear()
+        ..addAll(
+          copia.map((e) => Agendamento.fromJson(e as Map<String, dynamic>)),
         );
-        encontrou = true;
-      } on Object {
-        _itens.clear(); // dados corrompidos: trata como primeiro acesso
-      }
     }
-
-    if (!encontrou && semearSeVazio) _semear();
-    _concluirVencidos();
-    await _salvar();
     notifyListeners();
   }
 
-  /// Esvazia a memória (logout). Os dados salvos no aparelho permanecem.
-  void descarregar() {
-    _cpf = null;
+  Future<void> _salvarCache() async {
+    final usuarioId = supabase.auth.currentUser?.id;
+    if (usuarioId == null) return;
+    await CacheLocal.salvar(
+      'agendamentos',
+      usuarioId,
+      _itens.map((a) => a.toJson()).toList(),
+    );
+  }
+
+  /// Esquece os dados (ao sair ou excluir a conta).
+  void limpar() {
     _itens.clear();
     notifyListeners();
-  }
-
-  /// Agendamentos confirmados cuja data já passou viram "Realizado": sem
-  /// isso, ao reabrir o app dias depois eles ficariam "ativos" no passado.
-  void _concluirVencidos() {
-    final agora = DateTime.now();
-    for (var i = 0; i < _itens.length; i++) {
-      final a = _itens[i];
-      if (a.estaAtivo && a.dataHora.isBefore(agora)) {
-        _itens[i] = a.copyWith(status: StatusAgendamento.realizado);
-      }
-    }
-  }
-
-  Future<void> _salvar() async {
-    final cpf = _cpf;
-    if (cpf == null) return;
-    // O JSON é montado antes do await: grava o estado deste instante e não
-    // escreve nada se o usuário sair da conta enquanto o disco responde.
-    final json = jsonEncode({'itens': _itens.map((a) => a.toJson()).toList()});
-    final sequencia = _sequencia;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('$_prefixoChave$cpf', json);
-    await prefs.setInt(_chaveSequencia, sequencia);
   }
 
   /// Agendamentos confirmados, do mais próximo para o mais distante.
@@ -114,8 +93,9 @@ class AgendamentoRepository extends ChangeNotifier {
     return null;
   }
 
-  /// Um horário está livre se for futuro e o usuário não tiver outro
-  /// agendamento ativo exatamente na mesma data e hora.
+  /// Verificação rápida no aparelho: o horário precisa ser futuro e o
+  /// usuário não pode ter outro agendamento ativo exatamente na mesma data e
+  /// hora. O banco repete essas regras (e as de dia útil/horário padrão).
   bool horarioDisponivel(DateTime dataHora, {String? ignorarProtocolo}) {
     if (!dataHora.isAfter(DateTime.now())) return false;
     return !_itens.any(
@@ -126,122 +106,92 @@ class AgendamentoRepository extends ChangeNotifier {
     );
   }
 
-  Agendamento adicionar({
+  Future<Agendamento> adicionar({
     required TipoAtendimento tipo,
     required String servico,
     required Unidade unidade,
     required DateTime dataHora,
-  }) {
-    final novo = _criar(
-      tipo: tipo,
-      servico: servico,
-      unidade: unidade,
-      dataHora: dataHora,
-      status: StatusAgendamento.confirmado,
+  }) async {
+    final usuario = supabase.auth.currentUser;
+    if (usuario == null) throw const ErroApp('Sessão expirada. Entre de novo.');
+
+    final servicoId = Catalogo.servicoId(tipo, servico);
+    if (servicoId == null) {
+      throw const ErroApp(
+        'Catálogo indisponível. Verifique a internet e reabra o app.',
+      );
+    }
+
+    // O app não escolhe o profissional: o banco indica quem atende o serviço.
+    final profissionalId = await supabase.rpc(
+      'profissional_para',
+      params: {'p_unidade': unidade.id, 'p_servico': servicoId},
     );
+    if (profissionalId == null) {
+      throw const ErroApp('Não há profissional para este serviço na unidade.');
+    }
+
+    // protocolo e status são preenchidos pelo banco (grant por coluna).
+    final linha = await supabase
+        .from('agendamentos')
+        .insert({
+          'paciente_id': usuario.id,
+          'tipo': tipo.name,
+          'servico_id': servicoId,
+          'unidade_id': unidade.id,
+          'profissional_id': profissionalId,
+          'data_hora': dataHora.toUtc().toIso8601String(),
+        })
+        .select(_colunas)
+        .single();
+
+    final novo = _dePostgrest(linha);
     _itens.add(novo);
     notifyListeners();
-    unawaited(_salvar());
+    await _salvarCache();
     return novo;
   }
 
   /// Move o agendamento para o histórico com status "Cancelado".
-  void cancelar(String protocolo) {
-    _substituir(
-      protocolo,
-      (a) => a.copyWith(status: StatusAgendamento.cancelado),
-    );
-  }
+  Future<void> cancelar(String protocolo) =>
+      _atualizar(protocolo, {'status': StatusAgendamento.cancelado.name});
 
-  void reagendar(String protocolo, DateTime novaDataHora) {
-    _substituir(protocolo, (a) => a.copyWith(dataHora: novaDataHora));
-  }
+  Future<void> reagendar(String protocolo, DateTime novaDataHora) =>
+      _atualizar(protocolo, {'data_hora': novaDataHora.toUtc().toIso8601String()});
 
-  void _substituir(String protocolo, Agendamento Function(Agendamento) fn) {
+  Future<void> _atualizar(String protocolo, Map<String, dynamic> campos) async {
     final indice = _itens.indexWhere((a) => a.protocolo == protocolo);
     if (indice < 0) return;
-    _itens[indice] = fn(_itens[indice]);
+
+    final linha = await supabase
+        .from('agendamentos')
+        .update(campos)
+        .eq('protocolo', protocolo)
+        .select(_colunas)
+        .single();
+
+    _itens[indice] = _dePostgrest(linha);
     notifyListeners();
-    unawaited(_salvar());
+    await _salvarCache();
   }
 
-  Agendamento _criar({
-    required TipoAtendimento tipo,
-    required String servico,
-    required Unidade unidade,
-    required DateTime dataHora,
-    required StatusAgendamento status,
-  }) {
-    final numero = (_sequencia++).toString().padLeft(6, '0');
+  Agendamento _dePostgrest(Map<String, dynamic> m) {
+    final servico = m['servicos'] as Map<String, dynamic>?;
+    final profissional = m['profissionais'] as Map<String, dynamic>?;
+    final tipo = TipoAtendimento.values.byName(m['tipo'] as String);
+    final nomeServico = (servico?['nome'] as String?) ?? tipo.rotulo;
+
     return Agendamento(
-      protocolo: 'AF-${DateTime.now().year}-$numero',
+      protocolo: m['protocolo'] as String,
       tipo: tipo,
-      servico: servico,
-      unidade: unidade,
-      profissional: Catalogo.profissionalPara(tipo, servico, unidade: unidade),
-      dataHora: dataHora,
-      status: status,
-      orientacoes: Catalogo.orientacoesPara(tipo, servico),
+      servico: nomeServico,
+      unidade: Catalogo.unidadePorId(m['unidade_id'] as String),
+      profissional: (profissional?['nome'] as String?) ?? 'Equipe da unidade',
+      dataHora: DateTime.parse(m['data_hora'] as String).toLocal(),
+      status: StatusAgendamento.values.byName(m['status'] as String),
+      orientacoes: servico?['orientacoes'] != null
+          ? List<String>.from(servico!['orientacoes'] as List)
+          : Catalogo.orientacoesPara(tipo, nomeServico),
     );
-  }
-
-  /// Dados iniciais relativos à data atual, para o app nunca abrir vazio.
-  void _semear() {
-    final vilaMariana = Catalogo.unidades[0];
-
-    _itens.addAll([
-      _criar(
-        tipo: TipoAtendimento.consulta,
-        servico: 'Clínica Médica',
-        unidade: vilaMariana,
-        dataHora: _diaUtil(3, 9, 30),
-        status: StatusAgendamento.confirmado,
-      ),
-      _criar(
-        tipo: TipoAtendimento.vacinacao,
-        servico: 'Vacina da gripe',
-        unidade: vilaMariana,
-        dataHora: _diaUtil(7, 11, 0),
-        status: StatusAgendamento.confirmado,
-      ),
-      _criar(
-        tipo: TipoAtendimento.exame,
-        servico: 'Hemograma completo',
-        unidade: vilaMariana,
-        dataHora: _diaUtil(12, 8, 0),
-        status: StatusAgendamento.confirmado,
-      ),
-      _criar(
-        tipo: TipoAtendimento.consulta,
-        servico: 'Clínica Médica',
-        unidade: vilaMariana,
-        dataHora: _diaUtil(-14, 11, 0),
-        status: StatusAgendamento.realizado,
-      ),
-      _criar(
-        tipo: TipoAtendimento.vacinacao,
-        servico: 'Vacina da gripe',
-        unidade: vilaMariana,
-        dataHora: _diaUtil(-40, 15, 30),
-        status: StatusAgendamento.realizado,
-      ),
-      _criar(
-        tipo: TipoAtendimento.exame,
-        servico: 'Glicemia em jejum',
-        unidade: vilaMariana,
-        dataHora: _diaUtil(-22, 8, 0),
-        status: StatusAgendamento.naoCompareceu,
-      ),
-    ]);
-  }
-
-  /// Data daqui a [dias] dias, empurrada para segunda se cair no fim de semana.
-  static DateTime _diaUtil(int dias, int hora, int minuto) {
-    final base = DateTime.now().add(Duration(days: dias));
-    var dia = DateTime(base.year, base.month, base.day, hora, minuto);
-    while (dia.weekday == DateTime.saturday || dia.weekday == DateTime.sunday) {
-      dia = DateTime(dia.year, dia.month, dia.day + 1, hora, minuto);
-    }
-    return dia;
   }
 }

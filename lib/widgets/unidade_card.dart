@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/app_colors.dart';
 import '../core/app_text.dart';
+import '../data/catalogo.dart';
 import '../models/unidade.dart';
 import 'tag_servico.dart';
 
@@ -16,11 +17,13 @@ class UnidadeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final u = unidade;
+    final distancia = Catalogo.distanciaTexto(u);
 
     return Semantics(
       button: true,
       label: '${u.nome}, ${u.endereco}, ${u.horarioFuncionamento}, '
-          'telefone ${u.telefone}, a ${u.distanciaFormatada}. '
+          'telefone ${u.telefone}'
+          '${distancia == null ? '' : ', a $distancia'}. '
           'Toque para ver detalhes.',
       excludeSemantics: true,
       child: Material(
@@ -62,19 +65,21 @@ class UnidadeCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.near_me_outlined,
-                          size: 14,
-                          color: AppColors.azulPrimario,
-                        ),
-                        const SizedBox(width: 3),
-                        Text(u.distanciaFormatada, style: AppText.distancia),
-                      ],
-                    ),
+                    if (distancia != null) ...[
+                      const SizedBox(width: 8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.near_me_outlined,
+                            size: 14,
+                            color: AppColors.azulPrimario,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(distancia, style: AppText.distancia),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 10),

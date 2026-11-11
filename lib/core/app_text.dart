@@ -127,4 +127,12 @@ abstract final class AppText {
       );
   static TextStyle get cartaoValor =>
       _poppins(13, FontWeight.w600, Colors.white, height: 1.3);
+
+  // Login / cadastro
+  static TextStyle get loginTitulo =>
+      _poppins(28, FontWeight.w700, AppColors.azulEscuro, height: 1.2);
+  static TextStyle get loginSubtitulo =>
+      _poppins(13, FontWeight.w400, AppColors.azulSubtitulo, height: 1.4);
+  static TextStyle get erroForm =>
+      _poppins(13, FontWeight.w500, AppColors.canceladoTexto, height: 1.4);
 }

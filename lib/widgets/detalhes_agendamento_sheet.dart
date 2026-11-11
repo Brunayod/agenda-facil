@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../core/app_colors.dart';
 import '../core/app_text.dart';
 import '../data/agendamento_repository.dart';
+import '../data/erros.dart';
 import '../models/agendamento.dart';
 import 'app_snack_bar.dart';
 import 'botao_app.dart';
@@ -45,7 +46,16 @@ class _ConteudoDetalhes extends StatelessWidget {
     final nova = await ReagendarSheet.mostrar(context, a);
     if (nova == null) return;
 
-    AgendamentoRepository.instance.reagendar(a.protocolo, nova);
+    try {
+      await AgendamentoRepository.instance.reagendar(a.protocolo, nova);
+    } catch (erro) {
+      AppSnackBar.mostrar(
+        messenger,
+        mensagemDeErro(erro),
+        icone: Icons.error_outline,
+      );
+      return;
+    }
     final atualizado = a.copyWith(dataHora: nova);
 
     navigator.pop(); // fecha os detalhes
@@ -98,7 +108,16 @@ class _ConteudoDetalhes extends StatelessWidget {
     );
     if (confirmou != true) return;
 
-    AgendamentoRepository.instance.cancelar(a.protocolo);
+    try {
+      await AgendamentoRepository.instance.cancelar(a.protocolo);
+    } catch (erro) {
+      AppSnackBar.mostrar(
+        messenger,
+        mensagemDeErro(erro),
+        icone: Icons.error_outline,
+      );
+      return;
+    }
     navigator.pop(); // fecha os detalhes
     aoCancelar?.call();
     AppSnackBar.mostrar(

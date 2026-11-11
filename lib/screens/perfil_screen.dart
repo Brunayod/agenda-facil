@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/app_text.dart';
 import '../data/catalogo.dart';
+import '../data/erros.dart';
 import '../data/paciente_repository.dart';
+import '../data/sessao_repository.dart';
 import '../models/paciente.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_snack_bar.dart';
@@ -28,7 +30,7 @@ class PerfilScreen extends StatelessWidget {
     BuildContext context, {
     required String titulo,
     required String dica,
-    required bool Function(String) salvar,
+    required Future<bool> Function(String) salvar,
   }) async {
     final messenger = ScaffoldMessenger.of(context);
     final texto = await DialogoAdicionarItem.mostrar(
@@ -38,18 +40,42 @@ class PerfilScreen extends StatelessWidget {
     );
     if (texto == null) return;
 
-    if (!salvar(texto)) {
+    try {
+      if (!await salvar(texto)) {
+        AppSnackBar.mostrar(
+          messenger,
+          'Esse item já está na lista.',
+          icone: Icons.info_outline,
+        );
+      }
+    } catch (erro) {
       AppSnackBar.mostrar(
         messenger,
-        'Esse item já está na lista.',
-        icone: Icons.info_outline,
+        mensagemDeErro(erro),
+        icone: Icons.error_outline,
       );
     }
   }
 
-  /// Pede confirmação e encerra a sessão; o app volta sozinho ao login.
-  Future<void> _confirmarSaida(BuildContext context) async {
+  /// Executa uma alteração do perfil; se o servidor recusar, avisa o usuário
+  /// (o repositório já desfaz a alteração na tela).
+  Future<void> _salvar(
+    BuildContext context,
+    Future<void> Function() alteracao,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
+    try {
+      await alteracao();
+    } catch (erro) {
+      AppSnackBar.mostrar(
+        messenger,
+        mensagemDeErro(erro),
+        icone: Icons.error_outline,
+      );
+    }
+  }
+
+  Future<void> _sair(BuildContext context) async {
     final confirmou = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -58,19 +84,17 @@ class PerfilScreen extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Sair da conta?', style: AppText.listaTitulo),
         content: Text(
-          'Você precisará entrar novamente com seu CPF ou Cartão SUS. '
-          'Seus agendamentos e dados continuam salvos neste aparelho.',
+          'Você precisará entrar novamente com CPF ou Cartão SUS e senha. '
+          'Seus agendamentos e dados continuam salvos na sua conta.',
           style: AppText.detalheCorpo,
         ),
+        actionsOverflowButtonSpacing: 8,
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(
-              'Cancelar',
-              style: AppText.opcao(
-                AppColors.textoSecundario,
-                peso: FontWeight.w600,
-              ),
+              'Continuar conectado',
+              style: AppText.opcao(AppColors.azulPrimario, peso: FontWeight.w600),
             ),
           ),
           TextButton(
@@ -88,8 +112,54 @@ class PerfilScreen extends StatelessWidget {
     );
     if (confirmou != true) return;
 
-    await PacienteRepository.instance.sair();
-    AppSnackBar.mostrar(messenger, 'Você saiu da conta.', icone: Icons.logout);
+    // O AppRaiz troca para a LoginScreen quando a sessão é encerrada.
+    await SessaoRepository.instance.sair();
+  }
+
+  Future<void> _excluirConta(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Excluir minha conta?', style: AppText.listaTitulo),
+        content: Text(
+          'Seus dados pessoais, agendamentos e histórico serão apagados '
+          'definitivamente. Essa ação não pode ser desfeita.',
+          style: AppText.detalheCorpo,
+        ),
+        actionsOverflowButtonSpacing: 8,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Manter minha conta',
+              style: AppText.opcao(AppColors.azulPrimario, peso: FontWeight.w600),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Sim, excluir',
+              style: AppText.opcao(
+                AppColors.canceladoTexto,
+                peso: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmou != true) return;
+
+    // Em caso de sucesso o AppRaiz volta para a tela de login.
+    final erro = await SessaoRepository.instance.excluirConta();
+    if (erro != null) {
+      AppSnackBar.mostrar(messenger, erro, icone: Icons.error_outline);
+    }
   }
 
   @override
@@ -133,7 +203,8 @@ class PerfilScreen extends StatelessWidget {
                             for (final item in p.alergias)
                               ChipEditavel(
                                 rotulo: item,
-                                onRemover: () => repo.removerAlergia(item),
+                                onRemover: () =>
+                                    _salvar(context, () => repo.removerAlergia(item)),
                               ),
                             ChipAdicionar(
                               onTap: () => _adicionar(
@@ -155,7 +226,8 @@ class PerfilScreen extends StatelessWidget {
                             for (final item in p.condicoes)
                               ChipEditavel(
                                 rotulo: item,
-                                onRemover: () => repo.removerCondicao(item),
+                                onRemover: () =>
+                                    _salvar(context, () => repo.removerCondicao(item)),
                               ),
                             ChipAdicionar(
                               onTap: () => _adicionar(
@@ -233,7 +305,10 @@ class PerfilScreen extends StatelessWidget {
                             ToggleApp(
                               valor: p.lembretesAtivos,
                               rotulo: 'Lembretes de consulta',
-                              onChanged: repo.definirLembretes,
+                              onChanged: (ativos) => _salvar(
+                                context,
+                                () => repo.definirLembretes(ativos),
+                              ),
                             ),
                           ],
                         ),
@@ -248,8 +323,10 @@ class PerfilScreen extends StatelessWidget {
                               OpcaoChip(
                                 rotulo: tamanho.rotulo,
                                 selecionado: p.tamanhoTexto == tamanho,
-                                onTap: () =>
-                                    repo.definirTamanhoTexto(tamanho),
+                                onTap: () => _salvar(
+                                  context,
+                                  () => repo.definirTamanhoTexto(tamanho),
+                                ),
                               ),
                           ],
                         ),
@@ -266,7 +343,14 @@ class PerfilScreen extends StatelessWidget {
                     rotulo: 'Sair da conta',
                     icone: Icons.logout,
                     estilo: EstiloBotao.perigo,
-                    onPressed: () => _confirmarSaida(context),
+                    onPressed: () => _sair(context),
+                  ),
+                  const SizedBox(height: 10),
+                  BotaoApp(
+                    rotulo: 'Excluir minha conta',
+                    icone: Icons.delete_outline,
+                    estilo: EstiloBotao.contorno,
+                    onPressed: () => _excluirConta(context),
                   ),
                 ],
               ),

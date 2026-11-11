@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../core/app_colors.dart';
 import '../core/app_input.dart';
+import '../core/mascaras.dart';
 import '../core/app_text.dart';
 import '../data/catalogo.dart';
+import '../data/erros.dart';
 import '../data/paciente_repository.dart';
-import '../models/paciente.dart';
 import 'app_snack_bar.dart';
 import 'botao_app.dart';
 import 'opcao_chip.dart';
@@ -37,16 +38,6 @@ class _Conteudo extends StatefulWidget {
 }
 
 class _ConteudoState extends State<_Conteudo> {
-  static const _tiposSanguineos = [
-    'A+',
-    'A-',
-    'B+',
-    'B-',
-    'AB+',
-    'AB-',
-    'O+',
-    'O-',
-  ];
   static final _regexEmail = RegExp(r'^[\w.+-]+@[\w-]+\.[\w.-]+$');
 
   final _formKey = GlobalKey<FormState>();
@@ -62,9 +53,7 @@ class _ConteudoState extends State<_Conteudo> {
     final p = PacienteRepository.instance.paciente;
     _telefone = TextEditingController(text: p.telefone);
     _email = TextEditingController(text: p.email);
-    _endereco = TextEditingController(
-      text: p.endereco == Paciente.enderecoNaoInformado ? '' : p.endereco,
-    );
+    _endereco = TextEditingController(text: p.endereco);
     _tipoSanguineo = p.tipoSanguineo;
     _unidadeId = p.unidadeReferenciaId;
   }
@@ -97,20 +86,31 @@ class _ConteudoState extends State<_Conteudo> {
     return null;
   }
 
-  void _salvar() {
+  Future<void> _salvar() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     final repo = PacienteRepository.instance;
-    repo.atualizar(
-      repo.paciente.copyWith(
-        telefone: _telefone.text.trim(),
-        email: _email.text.trim(),
-        endereco: _endereco.text.trim(),
-        tipoSanguineo: _tipoSanguineo,
-        unidadeReferenciaId: _unidadeId,
-      ),
-    );
-    Navigator.of(context).pop(true);
+    try {
+      await repo.atualizar(
+        repo.paciente.copyWith(
+          telefone: _telefone.text.trim(),
+          email: _email.text.trim(),
+          endereco: _endereco.text.trim(),
+          tipoSanguineo: _tipoSanguineo,
+          unidadeReferenciaId: _unidadeId,
+        ),
+      );
+    } catch (erro) {
+      AppSnackBar.mostrar(
+        messenger,
+        mensagemDeErro(erro),
+        icone: Icons.error_outline,
+      );
+      return;
+    }
+    navigator.pop(true);
   }
 
   @override
@@ -155,6 +155,9 @@ class _ConteudoState extends State<_Conteudo> {
                       TextFormField(
                         controller: _telefone,
                         keyboardType: TextInputType.phone,
+                        inputFormatters: const [
+                          MascaraInput(Mascaras.telefone, maxDigitos: 11),
+                        ],
                         textInputAction: TextInputAction.next,
                         style: AppText.campo,
                         validator: _validarTelefone,
@@ -207,7 +210,7 @@ class _ConteudoState extends State<_Conteudo> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          for (final tipo in _tiposSanguineos)
+                          for (final tipo in Catalogo.tiposSanguineos)
                             OpcaoChip(
                               rotulo: tipo,
                               selecionado: _tipoSanguineo == tipo,

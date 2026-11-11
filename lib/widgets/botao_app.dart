@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/app_text.dart';
 
-enum EstiloBotao { primario, contorno, perigo }
+/// primario = azul cheio · contorno = borda azul · perigo = borda vermelha ·
+/// destaque = azul escuro cheio (ação especial, ex.: acesso rápido).
+enum EstiloBotao { primario, contorno, perigo, destaque }
 
 /// Botão em formato de pílula, no estilo das abas do protótipo.
-/// Com [onPressed] nulo o botão fica desabilitado.
+///
+/// Com [onPressed] nulo o botão fica desabilitado. Com [carregando] mostra
+/// um indicador de progresso e ignora toques.
 class BotaoApp extends StatelessWidget {
   const BotaoApp({
     super.key,
@@ -14,20 +18,30 @@ class BotaoApp extends StatelessWidget {
     required this.onPressed,
     this.estilo = EstiloBotao.primario,
     this.icone,
+    this.carregando = false,
   });
 
   final String rotulo;
   final VoidCallback? onPressed;
   final EstiloBotao estilo;
   final IconData? icone;
+  final bool carregando;
 
   @override
   Widget build(BuildContext context) {
-    final habilitado = onPressed != null;
+    final habilitado = onPressed != null && !carregando;
 
     final _Cores cores = switch (estilo) {
       EstiloBotao.primario => _Cores(
-          fundo: habilitado ? AppColors.azulPrimario : AppColors.iconeInativo,
+          fundo: (habilitado || carregando)
+              ? AppColors.azulPrimario
+              : AppColors.iconeInativo,
+          texto: Colors.white,
+        ),
+      EstiloBotao.destaque => _Cores(
+          fundo: (habilitado || carregando)
+              ? AppColors.azulEscuro
+              : AppColors.iconeInativo,
           texto: Colors.white,
         ),
       EstiloBotao.contorno => const _Cores(
@@ -45,28 +59,37 @@ class BotaoApp extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: habilitado,
-      label: rotulo,
+      label: carregando ? '$rotulo, aguarde' : rotulo,
       excludeSemantics: true,
       child: Material(
         color: cores.fundo,
         clipBehavior: Clip.antiAlias,
         shape: StadiumBorder(side: cores.borda),
         child: InkWell(
-          onTap: onPressed,
+          onTap: habilitado ? onPressed : null,
           child: SizedBox(
             height: 52,
             width: double.infinity,
             child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (icone != null) ...[
-                    Icon(icone, size: 20, color: cores.texto),
-                    const SizedBox(width: 8),
-                  ],
-                  Text(rotulo, style: AppText.botao(cores.texto)),
-                ],
-              ),
+              child: carregando
+                  ? SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: cores.texto,
+                      ),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (icone != null) ...[
+                          Icon(icone, size: 20, color: cores.texto),
+                          const SizedBox(width: 8),
+                        ],
+                        Text(rotulo, style: AppText.botao(cores.texto)),
+                      ],
+                    ),
             ),
           ),
         ),

@@ -4,9 +4,11 @@ import '../core/app_colors.dart';
 import '../core/app_input.dart';
 import '../core/app_text.dart';
 import '../data/catalogo.dart';
+import '../data/localizacao_repository.dart';
 import '../models/tipo_atendimento.dart';
 import '../models/unidade.dart';
 import '../widgets/app_header.dart';
+import '../widgets/cartao_localizacao.dart';
 import '../widgets/detalhes_unidade_sheet.dart';
 import '../widgets/opcao_chip.dart';
 import '../widgets/unidade_card.dart';
@@ -40,6 +42,14 @@ class _RedeScreenState extends State<RedeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Recalcula distâncias e ordem quando a posição do GPS chega.
+    return ListenableBuilder(
+      listenable: LocalizacaoRepository.instance,
+      builder: (context, _) => _construir(context),
+    );
+  }
+
+  Widget _construir(BuildContext context) {
     final unidades = Catalogo.buscarUnidades(
       consulta: _busca.text,
       tipo: _filtro,
@@ -52,6 +62,8 @@ class _RedeScreenState extends State<RedeScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
             children: [
+              const CartaoLocalizacao(),
+              const SizedBox(height: 12),
               TextField(
                 controller: _busca,
                 textInputAction: TextInputAction.search,

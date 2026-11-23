@@ -22,9 +22,7 @@ class AppBottomNav extends StatelessWidget {
 
   /// Quanto o botão central sobressai acima da barra branca.
   static const double _saliencia = 19;
-  /// Altura da barra branca (sem a área de gestos do sistema). Folga extra
-  /// para ícone + rótulo nunca estourarem, mesmo com fonte ampliada.
-  static const double _alturaBarra = 67;
+  static const double _alturaBarra = 66;
 
   @override
   Widget build(BuildContext context) {
@@ -135,20 +133,27 @@ class _ItemNav extends StatelessWidget {
         child: InkResponse(
           onTap: onTap,
           radius: 36,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SvgPicture.asset(selecionado ? iconeAtivo : iconeInativo),
-              const SizedBox(height: 2),
-              Text(
-                rotulo,
-                style: AppText.navRotulo,
-                maxLines: 1,
-                // A barra tem altura fixa: limita o aumento de fonte do sistema.
-                textScaler:
-                    MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.15),
+          // FittedBox reduz o conjunto (ícone + rótulo) se faltar espaço,
+          // então a barra nunca estoura, seja qual for a escala de fonte.
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SvgPicture.asset(selecionado ? iconeAtivo : iconeInativo),
+                  const SizedBox(height: 2),
+                  Text(
+                    rotulo,
+                    style: AppText.navRotulo,
+                    maxLines: 1,
+                    // Limita o aumento de fonte do sistema nesta barra.
+                    textScaler: MediaQuery.textScalerOf(context)
+                        .clamp(maxScaleFactor: 1.15),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

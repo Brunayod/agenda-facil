@@ -5,6 +5,7 @@ import '../core/app_colors.dart';
 import '../core/app_text.dart';
 import '../data/agendamento_repository.dart';
 import '../data/catalogo.dart';
+import '../data/erros.dart';
 import '../models/agendamento.dart';
 import '../models/unidade.dart';
 import '../widgets/app_background.dart';
@@ -73,7 +74,7 @@ class _NovoAgendamentoScreenState extends State<NovoAgendamentoScreen> {
     });
   }
 
-  void _confirmar() {
+  Future<void> _confirmar() async {
     final tipo = _tipo;
     final servico = _servico;
     final unidade = _unidade;
@@ -95,13 +96,23 @@ class _NovoAgendamentoScreenState extends State<NovoAgendamentoScreen> {
       return;
     }
 
-    final novo = repo.adicionar(
-      tipo: tipo,
-      servico: servico,
-      unidade: unidade,
-      dataHora: dataHora,
-    );
-    Navigator.of(context).pop(novo);
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final novo = await repo.adicionar(
+        tipo: tipo,
+        servico: servico,
+        unidade: unidade,
+        dataHora: dataHora,
+      );
+      navigator.pop(novo);
+    } catch (erro) {
+      AppSnackBar.mostrar(
+        messenger,
+        mensagemDeErro(erro),
+        icone: Icons.error_outline,
+      );
+    }
   }
 
   @override

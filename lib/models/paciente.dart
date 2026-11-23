@@ -30,9 +30,6 @@ class Paciente {
     this.tamanhoTexto = TamanhoTexto.normal,
   });
 
-  /// Valor do endereço quando o paciente se cadastra sem informá-lo.
-  static const enderecoNaoInformado = 'Não informado';
-
   final String nome;
 
   /// Cartão Nacional de Saúde: 15 dígitos, sem formatação.

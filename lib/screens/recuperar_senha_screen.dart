@@ -96,7 +96,7 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
       _Etapa.email => 'Informe o e-mail cadastrado na sua conta.',
       _Etapa.codigo =>
         'Se houver uma conta com o e-mail ${_email.text.trim()}, você '
-            'receberá um código de 6 dígitos. Confira também a caixa de spam.',
+            'receberá um código de 8 dígitos. Confira também a caixa de spam.',
       _Etapa.senha => 'Escolha uma nova senha para entrar no Agenda Fácil.',
     };
     final acao = switch (_etapa) {
@@ -153,12 +153,12 @@ class _RecuperarSenhaScreenState extends State<RecuperarSenhaScreen> {
                             autofillHints: const [AutofillHints.oneTimeCode],
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(6),
+                              LengthLimitingTextInputFormatter(8),
                             ],
                             onFieldSubmitted: (_) => _continuar(),
-                            validator: (valor) => valor?.length == 6
+                            validator: (valor) => valor?.length == 8
                                 ? null
-                                : 'Informe os 6 dígitos do código.',
+                                : 'Informe os 8 dígitos do código.',
                             style: AppText.campo,
                             decoration: CampoDecoracao.criar(
                               rotulo: 'Código de recuperação',

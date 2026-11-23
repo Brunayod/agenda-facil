@@ -6,14 +6,12 @@ import '../core/app_text.dart';
 import '../data/agendamento_repository.dart';
 import '../data/catalogo.dart';
 import '../data/erros.dart';
-import '../data/localizacao_repository.dart';
 import '../models/agendamento.dart';
 import '../models/unidade.dart';
 import '../widgets/app_background.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_snack_bar.dart';
 import '../widgets/botao_app.dart';
-import '../widgets/cartao_localizacao.dart';
 import '../widgets/opcao_chip.dart';
 import '../widgets/seletor_data_hora.dart';
 import '../widgets/tile_unidade.dart';
@@ -177,30 +175,22 @@ class _NovoAgendamentoScreenState extends State<NovoAgendamentoScreen> {
                       _Secao(
                         numero: 3,
                         titulo: 'Unidade',
-                        // Reordena (da mais próxima para a mais distante) e
-                        // atualiza os selos de distância quando o GPS responde.
-                        child: ListenableBuilder(
-                          listenable: LocalizacaoRepository.instance,
-                          builder: (context, _) => Column(
-                            children: [
-                              const CartaoLocalizacao(),
-                              const SizedBox(height: 12),
-                              for (final unidade in Catalogo.unidadesOrdenadas)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: TileUnidade(
-                                    unidade: unidade,
-                                    selecionada: _unidade == unidade,
-                                    distancia: Catalogo.distanciaTexto(unidade),
-                                    motivoIndisponivel:
-                                        tipo != null && !unidade.oferece(tipo)
-                                            ? 'Não oferece ${tipo.rotulo}'
-                                            : null,
-                                    onTap: () => _selecionarUnidade(unidade),
-                                  ),
+                        child: Column(
+                          children: [
+                            for (final unidade in Catalogo.unidades)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: TileUnidade(
+                                  unidade: unidade,
+                                  selecionada: _unidade == unidade,
+                                  motivoIndisponivel:
+                                      tipo != null && !unidade.oferece(tipo)
+                                          ? 'Não oferece ${tipo.rotulo}'
+                                          : null,
+                                  onTap: () => _selecionarUnidade(unidade),
                                 ),
-                            ],
-                          ),
+                              ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 16),

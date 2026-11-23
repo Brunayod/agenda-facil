@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/paciente.dart';
 import 'agendamento_repository.dart';
-import 'cache_local.dart';
 import 'dados_demo.dart';
 import 'erros.dart';
 import 'paciente_repository.dart';
@@ -20,9 +19,6 @@ class SessaoRepository extends ChangeNotifier {
   static final SessaoRepository instance = SessaoRepository._();
 
   bool _logado = false;
-
-  /// `id` do usuário logado (para apagar a cópia local ao sair).
-  String? _usuarioId;
 
   bool get logado => _logado;
 
@@ -111,26 +107,6 @@ class SessaoRepository extends ChangeNotifier {
 
       try {
         await _carregarDados();
-      } on PostgrestException catch (erro) {
-        // PGRST116 = nenhuma linha em `pacientes` para este usuário: o
-        // trigger de cadastro não rodou (SQL não aplicado). Grava direto.
-        final usuarioId = supabase.auth.currentUser?.id ?? resposta.user?.id;
-        if (erro.code != 'PGRST116' || usuarioId == null) {
-          await _encerrarLocalmente();
-          return mensagemDeErro(erro);
-        }
-        debugPrint(
-          'SessaoRepository: o trigger criar_paciente_no_cadastro não criou '
-          'a linha em pacientes. Gravando direto pelo app. Rode o '
-          'supabase_setup.sql para corrigir o banco.',
-        );
-        try {
-          await _gravarPacienteDireto(usuarioId, paciente);
-          await _carregarDados();
-        } catch (erroDireto) {
-          await _encerrarLocalmente();
-          return mensagemDeErro(erroDireto);
-        }
       } catch (erro) {
         await _encerrarLocalmente();
         return mensagemDeErro(erro);
@@ -141,36 +117,27 @@ class SessaoRepository extends ChangeNotifier {
     }
   }
 
-  /// Plano B do cadastro: insere o paciente da conta recém-criada. Exige a
-  /// política `paciente_insere_proprio` do `supabase_setup.sql` (RLS).
-  Future<void> _gravarPacienteDireto(String usuarioId, Paciente p) async {
-    await supabase.from('pacientes').insert({
-      'id': usuarioId,
-      'nome': p.nome,
-      'cpf': p.cpf,
-      'cns': p.cns,
-      'data_nascimento': _dataIso(p.dataNascimento),
-      'tipo_sanguineo': p.tipoSanguineo.isEmpty ? null : p.tipoSanguineo,
-      'telefone': p.telefone,
-      'email': p.email,
-      'endereco': p.endereco,
-      'unidade_referencia_id': p.unidadeReferenciaId,
-      'alergias': p.alergias,
-      'condicoes': p.condicoes,
-    });
-  }
-
   /// Entra direto com a paciente de demonstração (criada no Supabase pela
   /// seção 7 do SQL).
   Future<String?> entrarComoDemo() async {
     try {
-      return await _autenticar(DadosDemo.email, DadosDemo.senha);
+      final erro = await _autenticar(DadosDemo.email, DadosDemo.senha);
+      if (erro == mensagemSemCadastro) {
+        return 'A conta de demonstração existe, mas está sem dados. Rode o '
+            'script agenda_facil_supabase_demo.sql (passo 2) no Supabase.';
+      }
+      return erro;
     } catch (erro) {
       final m = mensagemDeErro(erro);
-      return m == 'CPF/CNS ou senha incorretos.'
-          ? 'Conta de demonstração não encontrada no Supabase. '
-              'Crie-a conforme a seção 7 do SQL.'
-          : m;
+      if (m == 'CPF/CNS ou senha incorretos.') {
+        return 'Conta de demonstração não encontrada (ou senha alterada). '
+            'Recrie-a conforme o script agenda_facil_supabase_demo.sql.';
+      }
+      if (m == mensagemSemConexao) {
+        return '$m Se você estiver online, o projeto do Supabase pode estar '
+            'pausado (plano gratuito): abra o painel e clique em "Restore project".';
+      }
+      return m;
     }
   }
 
@@ -223,7 +190,6 @@ class SessaoRepository extends ChangeNotifier {
   Future<void> _carregarDados() async {
     await PacienteRepository.instance.carregar();
     await AgendamentoRepository.instance.carregar();
-    _usuarioId = supabase.auth.currentUser?.id;
     _logado = true;
     notifyListeners();
   }
@@ -238,9 +204,6 @@ class SessaoRepository extends ChangeNotifier {
 
   void _limpar() {
     // Primeiro troca a tela (AppRaiz volta ao login), depois apaga os dados.
-    final usuarioId = _usuarioId;
-    _usuarioId = null;
-    if (usuarioId != null) CacheLocal.limparUsuario(usuarioId);
     _logado = false;
     notifyListeners();
     PacienteRepository.instance.limpar();

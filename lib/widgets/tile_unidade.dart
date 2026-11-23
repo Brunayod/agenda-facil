@@ -15,16 +15,12 @@ class TileUnidade extends StatelessWidget {
     required this.selecionada,
     required this.onTap,
     this.motivoIndisponivel,
-    this.distancia,
   });
 
   final Unidade unidade;
   final bool selecionada;
   final VoidCallback onTap;
   final String? motivoIndisponivel;
-
-  /// Ex.: "0,8 km" (distância real pelo GPS); `null` esconde o selo.
-  final String? distancia;
 
   bool get _habilitada => motivoIndisponivel == null;
 
@@ -37,8 +33,7 @@ class TileUnidade extends StatelessWidget {
       button: true,
       selected: selecionada,
       enabled: _habilitada,
-      label: '${unidade.nome}, ${motivoIndisponivel ?? unidade.endereco}'
-          '${distancia == null ? '' : ', a $distancia'}',
+      label: '${unidade.nome}, ${motivoIndisponivel ?? unidade.endereco}',
       excludeSemantics: true,
       child: Material(
         color: !_habilitada
@@ -83,16 +78,6 @@ class TileUnidade extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (distancia != null) ...[
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.near_me_outlined,
-                    size: 14,
-                    color: AppColors.azulPrimario,
-                  ),
-                  const SizedBox(width: 3),
-                  Text(distancia!, style: AppText.distancia),
-                ],
               ],
             ),
           ),

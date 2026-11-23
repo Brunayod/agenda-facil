@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 import '../core/app_text.dart';
 import '../data/catalogo.dart';
+import '../data/dados_demo.dart';
 import '../data/erros.dart';
 import '../data/paciente_repository.dart';
 import '../data/sessao_repository.dart';
@@ -171,6 +172,8 @@ class PerfilScreen extends StatelessWidget {
       builder: (context, _) {
         final p = repo.paciente;
         final ubs = Catalogo.unidadePorId(p.unidadeReferenciaId);
+        // A conta de demonstração é compartilhada: não pode ser excluída.
+        final ehDemo = p.cpf == DadosDemo.cpf;
 
         return Column(
           children: [
@@ -345,13 +348,15 @@ class PerfilScreen extends StatelessWidget {
                     estilo: EstiloBotao.perigo,
                     onPressed: () => _sair(context),
                   ),
-                  const SizedBox(height: 10),
-                  BotaoApp(
-                    rotulo: 'Excluir minha conta',
-                    icone: Icons.delete_outline,
-                    estilo: EstiloBotao.contorno,
-                    onPressed: () => _excluirConta(context),
-                  ),
+                  if (!ehDemo) ...[
+                    const SizedBox(height: 10),
+                    BotaoApp(
+                      rotulo: 'Excluir minha conta',
+                      icone: Icons.delete_outline,
+                      estilo: EstiloBotao.contorno,
+                      onPressed: () => _excluirConta(context),
+                    ),
+                  ],
                 ],
               ),
             ),

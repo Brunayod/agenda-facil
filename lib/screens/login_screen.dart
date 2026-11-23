@@ -13,6 +13,8 @@ import '../widgets/app_background.dart';
 import '../widgets/botao_app.dart';
 import '../widgets/campo_senha.dart';
 import 'cadastro_screen.dart';
+import '../widgets/app_snack_bar.dart';
+import 'recuperar_senha_screen.dart';
 
 /// Tela de login: CPF ou Cartão SUS (CNS) + senha.
 class LoginScreen extends StatefulWidget {
@@ -78,6 +80,19 @@ class _LoginScreenState extends State<LoginScreen> {
       MaterialPageRoute(builder: (context) => const CadastroScreen()),
     );
   }
+  Future<void> _recuperarSenha() async {
+  final redefinida = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(builder: (_) => const RecuperarSenhaScreen()),
+  );
+  if (!mounted || redefinida != true) return;
+
+  _senha.clear();
+  setState(() => _erro = null);
+  AppSnackBar.mostrar(
+    ScaffoldMessenger.of(context),
+    'Senha redefinida. Entre com sua nova senha.',
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -146,6 +161,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : null,
                             onSubmitted: (_) => _ocupado ? null : _entrar(),
                           ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _ocupado ? null : _recuperarSenha,
+                              child: const Text('Esqueci minha senha'),
+                            ),
+                          ),
                           if (_erro != null) ...[
                             const SizedBox(height: 12),
                             _CaixaErro(mensagem: _erro!),
@@ -180,14 +202,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         carregando: _entrandoDemo,
                         onPressed: _ocupado ? null : _acessoRapido,
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Entra como Jheniffer Almeida Santos, com dados de '
-                        'demonstração.\nCPF ${Mascaras.cpf(DadosDemo.cpf)} · '
-                        'senha ${DadosDemo.senha}',
-                        textAlign: TextAlign.center,
-                        style: AppText.formAjuda,
-                      ),
                     ],
                   ),
                 ),
@@ -199,6 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
 
 /// Faixa azul do topo com a marca do app e o logo do SUS.
 class _CabecalhoLogin extends StatelessWidget {

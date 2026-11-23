@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../core/app_colors.dart';
 import '../core/app_text.dart';
-import '../data/catalogo.dart';
-import '../data/localizacao_repository.dart';
 import '../models/unidade.dart';
 import 'botao_app.dart';
 import 'info_linha.dart';
@@ -88,17 +86,9 @@ class _Conteudo extends StatelessWidget {
                               header: true,
                               child: Text(u.nome, style: AppText.cardTitulo),
                             ),
-                            ListenableBuilder(
-                              listenable: LocalizacaoRepository.instance,
-                              builder: (context, _) {
-                                final distancia = Catalogo.distanciaTexto(u);
-                                return Text(
-                                  distancia == null
-                                      ? u.bairro
-                                      : '${u.bairro} • a $distancia',
-                                  style: AppText.cardUnidade,
-                                );
-                              },
+                            Text(
+                              '${u.bairro} • a ${u.distanciaFormatada}',
+                              style: AppText.cardUnidade,
                             ),
                           ],
                         ),

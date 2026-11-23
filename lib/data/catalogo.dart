@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/agendamento.dart';
 import '../models/profissional.dart';
 import '../models/unidade.dart';
-import 'localizacao_repository.dart';
 import 'supabase_config.dart';
 
 /// Serviço do catálogo (especialidade, exame, vacina ou tipo de receita).
@@ -64,9 +63,7 @@ abstract final class Catalogo {
             endereco: u['endereco'] as String,
             horarioFuncionamento: u['horario_funcionamento'] as String,
             telefone: u['telefone'] as String,
-            distanciaKm: (u['distancia_km'] as num?)?.toDouble(),
-            latitude: _coordenada(u['latitude'], u['id'] as String, latitude: true),
-            longitude: _coordenada(u['longitude'], u['id'] as String, latitude: false),
+            distanciaKm: ((u['distancia_km'] as num?) ?? 0).toDouble(),
             servicos: [
               for (final t in (u['unidade_tipos'] as List))
                 TipoAtendimento.values.byName(t['tipo'] as String),
@@ -127,34 +124,6 @@ abstract final class Catalogo {
     return null;
   }
 
-  /// Coordenadas das UBS pelo `id`. Usadas quando o banco ainda não tem as
-  /// colunas `latitude`/`longitude` (rode o `supabase_setup.sql`).
-  ///
-  /// As de Cotia são as informadas pela equipe. As da capital são APROXIMADAS
-  /// (centro do bairro), pois os endereços de exemplo não são reais.
-  static const _coordenadasPadrao = <String, ({double lat, double lng})>{
-    'vila-mariana': (lat: -23.5895, lng: -46.6346),
-    'santa-cecilia': (lat: -23.5372, lng: -46.6504),
-    'republica': (lat: -23.5434, lng: -46.6428),
-    'bom-retiro': (lat: -23.5276, lng: -46.6348),
-    'pinheiros': (lat: -23.5667, lng: -46.6818),
-    'mirizola': (lat: -23.5976, lng: -46.9192),
-    'atalaia': (lat: -23.6115, lng: -46.9328),
-    'portao': (lat: -23.5882, lng: -46.8995),
-  };
-
-  /// Valor vindo do banco; se vazio, usa [_coordenadasPadrao]; senão `0`.
-  static double _coordenada(
-    Object? valorDoBanco,
-    String id, {
-    required bool latitude,
-  }) {
-    if (valorDoBanco is num) return valorDoBanco.toDouble();
-    final padrao = _coordenadasPadrao[id];
-    if (padrao == null) return 0;
-    return latitude ? padrao.lat : padrao.lng;
-  }
-
   static const _unidadesPadrao = <Unidade>[
     Unidade(
       id: 'vila-mariana',
@@ -164,8 +133,6 @@ abstract final class Catalogo {
       horarioFuncionamento: 'Seg a Sex • 07h às 19h',
       telefone: '(11) 5555-0101',
       distanciaKm: 1.2,
-      latitude: -23.5895,
-      longitude: -46.6346,
       servicos: [
         TipoAtendimento.consulta,
         TipoAtendimento.exame,
@@ -195,8 +162,6 @@ abstract final class Catalogo {
       horarioFuncionamento: 'Seg a Sex • 07h às 18h',
       telefone: '(11) 5555-0102',
       distanciaKm: 2.8,
-      latitude: -23.5372,
-      longitude: -46.6504,
       servicos: [
         TipoAtendimento.consulta,
         TipoAtendimento.exame,
@@ -223,8 +188,6 @@ abstract final class Catalogo {
       horarioFuncionamento: 'Seg a Sex • 08h às 17h',
       telefone: '(11) 5555-0103',
       distanciaKm: 3.4,
-      latitude: -23.5434,
-      longitude: -46.6428,
       servicos: [
         TipoAtendimento.consulta,
         TipoAtendimento.vacinacao,
@@ -251,8 +214,6 @@ abstract final class Catalogo {
       horarioFuncionamento: 'Seg a Sex • 07h às 19h',
       telefone: '(11) 5555-0104',
       distanciaKm: 4.1,
-      latitude: -23.5276,
-      longitude: -46.6348,
       servicos: [
         TipoAtendimento.consulta,
         TipoAtendimento.exame,
@@ -281,8 +242,6 @@ abstract final class Catalogo {
       horarioFuncionamento: 'Seg a Sáb • 07h às 13h',
       telefone: '(11) 5555-0105',
       distanciaKm: 5.6,
-      latitude: -23.5667,
-      longitude: -46.6818,
       servicos: [
         TipoAtendimento.consulta,
         TipoAtendimento.exame,
@@ -297,86 +256,6 @@ abstract final class Catalogo {
           nome: 'Dr. Gustavo Pires',
           especialidade: 'Saúde mental',
         ),
-        Profissional(
-          nome: 'Equipe de enfermagem',
-          especialidade: 'Vacinação',
-        ),
-        Profissional(
-          nome: 'Equipe do laboratório',
-          especialidade: 'Exames laboratoriais',
-        ),
-      ],
-    ),
-    Unidade(
-      id: 'mirizola',
-      nome: 'UBS Mirizola',
-      bairro: 'Parque Mirizola',
-      endereco: 'Rua Vicente Strifezzi, 139 - Parque Mirizola, Cotia - SP',
-      horarioFuncionamento: 'Seg a Sex • 07h às 17h',
-      telefone: '(11) 5555-0106',
-      latitude: -23.5976,
-      longitude: -46.9192,
-      servicos: [
-        TipoAtendimento.consulta,
-        TipoAtendimento.exame,
-        TipoAtendimento.vacinacao,
-        TipoAtendimento.receita,
-      ],
-      profissionais: [
-        Profissional(nome: 'Dra. Aline Teixeira', especialidade: 'Clínica Médica'),
-        Profissional(nome: 'Dr. Henrique Matos', especialidade: 'Pediatria'),
-        Profissional(nome: 'Dra. Larissa Campos', especialidade: 'Ginecologia'),
-        Profissional(nome: 'Dr. Murilo Barbosa', especialidade: 'Odontologia'),
-        Profissional(
-          nome: 'Equipe de enfermagem',
-          especialidade: 'Vacinação',
-        ),
-        Profissional(
-          nome: 'Equipe do laboratório',
-          especialidade: 'Exames laboratoriais',
-        ),
-      ],
-    ),
-    Unidade(
-      id: 'atalaia',
-      nome: 'UBS Atalaia',
-      bairro: 'Atalaia',
-      endereco: 'Bairro Atalaia, Cotia - SP',
-      horarioFuncionamento: 'Seg a Sex • 07h às 17h',
-      telefone: '(11) 5555-0107',
-      latitude: -23.6115,
-      longitude: -46.9328,
-      servicos: [
-        TipoAtendimento.consulta,
-        TipoAtendimento.vacinacao,
-        TipoAtendimento.receita,
-      ],
-      profissionais: [
-        Profissional(nome: 'Dr. Otávio Ribeiro', especialidade: 'Clínica Médica'),
-        Profissional(nome: 'Dra. Priscila Neves', especialidade: 'Pediatria'),
-        Profissional(
-          nome: 'Equipe de enfermagem',
-          especialidade: 'Vacinação',
-        ),
-      ],
-    ),
-    Unidade(
-      id: 'portao',
-      nome: 'UBS Portão',
-      bairro: 'Portão',
-      endereco: 'Bairro Portão, Cotia - SP',
-      horarioFuncionamento: 'Seg a Sex • 07h às 17h',
-      telefone: '(11) 5555-0108',
-      latitude: -23.5882,
-      longitude: -46.8995,
-      servicos: [
-        TipoAtendimento.consulta,
-        TipoAtendimento.exame,
-        TipoAtendimento.vacinacao,
-      ],
-      profissionais: [
-        Profissional(nome: 'Dra. Carolina Lopes', especialidade: 'Clínica Médica'),
-        Profissional(nome: 'Dr. Vinícius Prado', especialidade: 'Odontologia'),
         Profissional(
           nome: 'Equipe de enfermagem',
           especialidade: 'Vacinação',
@@ -431,45 +310,8 @@ abstract final class Catalogo {
       return _normalizar(u.nome).contains(termo) ||
           _normalizar(u.bairro).contains(termo);
     }).toList()
-      ..sort(compararPorProximidade);
+      ..sort((a, b) => a.distanciaKm.compareTo(b.distanciaKm));
     return lista;
-  }
-
-  /// Todas as unidades, da mais próxima para a mais distante.
-  static List<Unidade> get unidadesOrdenadas =>
-      [...unidades]..sort(compararPorProximidade);
-
-  /// Distância real (GPS + Haversine) até a unidade, em km; `null` se a
-  /// localização do usuário ainda não está disponível.
-  static double? distanciaKm(Unidade unidade) =>
-      LocalizacaoRepository.instance.distanciaAte(unidade);
-
-  /// Ex.: "0,8 km"; `null` se a distância ainda não é conhecida.
-  static String? distanciaTexto(Unidade unidade) {
-    final km = distanciaKm(unidade);
-    return km == null ? null : Unidade.formatarKm(km);
-  }
-
-  /// Com GPS: pela distância real. Sem GPS: pela distância simulada antiga
-  /// (quando existe) e, por fim, pelo nome.
-  static int compararPorProximidade(Unidade a, Unidade b) {
-    final reaisA = distanciaKm(a);
-    final reaisB = distanciaKm(b);
-    if (reaisA != null && reaisB != null) return reaisA.compareTo(reaisB);
-    if (reaisA != null) return -1;
-    if (reaisB != null) return 1;
-
-    final simA = a.distanciaKm;
-    final simB = b.distanciaKm;
-    if (simA != null && simB != null) {
-      final comparacao = simA.compareTo(simB);
-      if (comparacao != 0) return comparacao;
-    } else if (simA != null) {
-      return -1;
-    } else if (simB != null) {
-      return 1;
-    }
-    return a.nome.compareTo(b.nome);
   }
 
   static String _normalizar(String texto) {

@@ -1,9 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/paciente.dart';
-import 'cache_local.dart';
-import 'erros.dart';
 import 'supabase_config.dart';
 
 /// Repositório (singleton) dos dados do paciente com sessão ativa.
@@ -36,24 +33,13 @@ class PacienteRepository extends ChangeNotifier {
     final usuario = supabase.auth.currentUser;
     if (usuario == null) throw StateError('Sem sessão ativa.');
 
-    try {
-      final linha = await supabase
-          .from('pacientes')
-          .select()
-          .eq('id', usuario.id)
-          .single();
+    final linha = await supabase
+        .from('pacientes')
+        .select()
+        .eq('id', usuario.id)
+        .single();
 
-      _paciente = _dePostgrest(linha);
-      await CacheLocal.salvar('paciente', usuario.id, _paciente!.toJson());
-    } catch (erro) {
-      // Erro do banco (RLS, linha ausente...) deve aparecer: não usa cache.
-      // Já falha de rede cai na cópia local, se existir.
-      if (erro is PostgrestException) rethrow;
-      final copia = await CacheLocal.ler('paciente', usuario.id);
-      if (copia is! Map<String, dynamic>) rethrow;
-      debugPrint('PacienteRepository: sem conexão ($erro); usando cópia local.');
-      _paciente = Paciente.fromJson(copia);
-    }
+    _paciente = _dePostgrest(linha);
     notifyListeners();
   }
 
@@ -87,10 +73,8 @@ class PacienteRepository extends ChangeNotifier {
         'lembretes_ativos': novo.lembretesAtivos,
         'tamanho_texto': novo.tamanhoTexto.name,
       }).eq('id', usuario.id);
-      await CacheLocal.salvar('paciente', usuario.id, novo.toJson());
     } catch (erro) {
-      registrarErro(erro);
-      debugPrint('PacienteRepository: falha ao salvar; alteração desfeita.');
+      debugPrint('PacienteRepository: falha ao salvar ($erro)');
       _paciente = anterior;
       notifyListeners();
       rethrow;

@@ -10,11 +10,9 @@ class Unidade {
     required this.endereco,
     required this.horarioFuncionamento,
     required this.telefone,
-    required this.latitude,
-    required this.longitude,
+    required this.distanciaKm,
     required this.servicos,
     required this.profissionais,
-    this.distanciaKm,
   });
 
   final String id;
@@ -26,14 +24,8 @@ class Unidade {
   final String horarioFuncionamento;
   final String telefone;
 
-  /// Coordenadas da UBS (graus decimais). `0, 0` = sem coordenadas.
-  final double latitude;
-  final double longitude;
-
-  /// Distância simulada (legado), usada só para ordenar a lista enquanto o
-  /// GPS do usuário não está disponível. A distância real é calculada a
-  /// partir de [latitude] e [longitude] (ver `LocalizacaoRepository`).
-  final double? distanciaKm;
+  /// Distância simulada até o usuário, em km.
+  final double distanciaKm;
 
   /// Tipos de atendimento oferecidos.
   final List<TipoAtendimento> servicos;
@@ -41,14 +33,9 @@ class Unidade {
 
   bool oferece(TipoAtendimento tipo) => servicos.contains(tipo);
 
-  /// `false` quando a UBS ainda não tem coordenadas cadastradas.
-  bool get temCoordenadas => !(latitude == 0 && longitude == 0);
-
-  /// Ex.: "0,8 km".
-  static String formatarKm(double km) {
-    if (km < 0.1) return '< 0,1 km';
-    return '${km.toStringAsFixed(1).replaceAll('.', ',')} km';
-  }
+  /// Ex.: "1,2 km".
+  String get distanciaFormatada =>
+      '${distanciaKm.toStringAsFixed(1).replaceAll('.', ',')} km';
 
   /// Especialidades atendidas na unidade.
   Set<String> get especialidades =>
@@ -67,8 +54,6 @@ class Unidade {
         'endereco': endereco,
         'horarioFuncionamento': horarioFuncionamento,
         'telefone': telefone,
-        'latitude': latitude,
-        'longitude': longitude,
         'distanciaKm': distanciaKm,
         'servicos': servicos.map((s) => s.name).toList(),
         'profissionais': profissionais.map((p) => p.toJson()).toList(),
@@ -81,9 +66,7 @@ class Unidade {
         endereco: json['endereco'] as String,
         horarioFuncionamento: json['horarioFuncionamento'] as String,
         telefone: json['telefone'] as String,
-        latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
-        longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
-        distanciaKm: (json['distanciaKm'] as num?)?.toDouble(),
+        distanciaKm: (json['distanciaKm'] as num).toDouble(),
         servicos: (json['servicos'] as List)
             .map((s) => TipoAtendimento.values.byName(s as String))
             .toList(),

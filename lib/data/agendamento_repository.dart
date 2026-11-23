@@ -1,9 +1,7 @@
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/agendamento.dart';
 import '../models/unidade.dart';
-import 'cache_local.dart';
 import 'catalogo.dart';
 import 'erros.dart';
 import 'supabase_config.dart';
@@ -27,43 +25,15 @@ class AgendamentoRepository extends ChangeNotifier {
 
   /// Carrega os agendamentos do usuário autenticado (a RLS filtra).
   Future<void> carregar() async {
-    final usuarioId = supabase.auth.currentUser?.id;
-    try {
-      final linhas = await supabase
-          .from('agendamentos')
-          .select(_colunas)
-          .order('data_hora', ascending: true);
+    final linhas = await supabase
+        .from('agendamentos')
+        .select(_colunas)
+        .order('data_hora', ascending: true);
 
-      _itens
-        ..clear()
-        ..addAll(linhas.map(_dePostgrest));
-      await _salvarCache();
-    } catch (erro) {
-      // Erro do banco (RLS, coluna...) deve aparecer; só falha de rede cai
-      // na cópia local.
-      if (erro is PostgrestException || usuarioId == null) rethrow;
-      final copia = await CacheLocal.ler('agendamentos', usuarioId);
-      if (copia is! List) rethrow;
-      debugPrint(
-        'AgendamentoRepository: sem conexão ($erro); usando cópia local.',
-      );
-      _itens
-        ..clear()
-        ..addAll(
-          copia.map((e) => Agendamento.fromJson(e as Map<String, dynamic>)),
-        );
-    }
+    _itens
+      ..clear()
+      ..addAll(linhas.map(_dePostgrest));
     notifyListeners();
-  }
-
-  Future<void> _salvarCache() async {
-    final usuarioId = supabase.auth.currentUser?.id;
-    if (usuarioId == null) return;
-    await CacheLocal.salvar(
-      'agendamentos',
-      usuarioId,
-      _itens.map((a) => a.toJson()).toList(),
-    );
   }
 
   /// Esquece os dados (ao sair ou excluir a conta).
@@ -148,7 +118,6 @@ class AgendamentoRepository extends ChangeNotifier {
     final novo = _dePostgrest(linha);
     _itens.add(novo);
     notifyListeners();
-    await _salvarCache();
     return novo;
   }
 
@@ -172,7 +141,6 @@ class AgendamentoRepository extends ChangeNotifier {
 
     _itens[indice] = _dePostgrest(linha);
     notifyListeners();
-    await _salvarCache();
   }
 
   Agendamento _dePostgrest(Map<String, dynamic> m) {
